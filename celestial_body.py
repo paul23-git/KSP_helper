@@ -4,11 +4,11 @@ import matplotlib.pyplot as plt
 import sys
 from scipy.optimize import *
 def _keplerEq(E, eccentricity, mean_anomaly):
-    return E + eccentricity*sin(E) - mean_anomaly
+    return E - eccentricity*sin(E) - mean_anomaly
 def _keplerEqPrime(E, eccentricy, mean_anomaly):
-    return 1 + eccentricy*cos(E)
+    return 1 - eccentricy*cos(E)
 def _keplerEqPrime2(E, eccentricity, mean_anomaly):
-    return -eccentricity * sin(E)
+    return eccentricity * sin(E)
 
 
 class CelestialOrbit:
