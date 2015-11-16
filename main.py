@@ -92,7 +92,41 @@ if __name__ == "__main__":
     ecc = np.linspace(0,0.8,9)
     ecc = np.append(ecc,0.85)
     ecc = np.append(ecc,np.linspace(0.9,0.94,5))
-    print(ecc)
+
+
+
+
+    # O = CelestialOrbit(celestial_parent_body=Kerbin, inclination=0, longitude_ascending_node=0, argument_periapsis=0, eccentricity = 0.94, semimajoraxis = 1e7)
+    # theta = O.InShadow(pi)
+    # if theta[1] >= 2*pi:
+    #     theta = (theta[0] - 2*pi, theta[1] - 2*pi)
+    # E = tuple(O.EccentricFromTrueAnomaly(t) for t in theta)
+    # M = tuple(O.MeanFromEccentricAnomaly(t) for t in E)
+    # print(theta, E, (E[1]-E[0])/pi, M, (M[1]-M[0])/pi)
+    #
+    # theta = O.InShadow(pi/2)
+    # if theta[1] >= 2*pi:
+    #     theta = (theta[0] - 2*pi, theta[1] - 2*pi)
+    # E = tuple(O.EccentricFromTrueAnomaly(t) for t in theta)
+    # M = tuple(O.MeanFromEccentricAnomaly(t) for t in E)
+    # print(theta, E, (E[1]-E[0])/pi, M, (M[1]-M[0])/pi)
+    #
+    # theta = O.InShadow(0)
+    # if theta[1] >= 2*pi:
+    #     theta = (theta[0] - 2*pi, theta[1] - 2*pi)
+    # E = tuple(O.EccentricFromTrueAnomaly(t) for t in theta)
+    # M = tuple(O.MeanFromEccentricAnomaly(t) for t in E)
+    # print(theta, E, (E[1]-E[0])/pi, M, (M[1]-M[0])/pi)
+    #
+    # for e in ecc:
+    #     O = CelestialOrbit(celestial_parent_body=Kerbin, inclination=0, longitude_ascending_node=0, argument_periapsis=0, eccentricity = e, semimajoraxis = 1e7)
+    #     E_x = np.linspace(0,2*pi)
+    #     M_y = np.array([O.MeanFromEccentricAnomaly(E)for E in E_x])
+    #     plt.plot(E_x, M_y, label="e"+str(e))
+    # plt.show()
+    #
+    #
+    # exit()
 
 
     fig_time = plt.figure()
@@ -101,12 +135,11 @@ if __name__ == "__main__":
     ax_time.set_ylabel("Time $[s]$")
     ax_time.grid()
 
-
     theta = np.linspace(0, 2*pi, 1000)
     for e in ecc:
         orbit = CelestialOrbit(celestial_parent_body=Kerbin, inclination=0, longitude_ascending_node=0, argument_periapsis=0, eccentricity = e, semimajoraxis = 1e7)
         time = np.array([ orbit.TimeInShadow(t) for t in theta])
-        ax_time.plot(theta/pi,time, label = "Ecc: " + str(e))
+        ax_time.plot(((theta)  )/pi,time, label = "Ecc: " + str(e))
 
     ax_time.legend()
     plt.show()

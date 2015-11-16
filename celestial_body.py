@@ -54,7 +54,7 @@ class CelestialOrbit:
             return nu
         return 2 * atan2(sqrt(1 - self.e) * sin(nu/2), sqrt(1 + self.e) * cos(nu/2))
     def MeanFromEccentricAnomaly(self, E):
-        return E + self.e * sin(E)
+        return E - self.e * sin(E)
     def EccentricFromMeanAnomaly(self, M):
         #0 = E + e * sin(E) - M
 
