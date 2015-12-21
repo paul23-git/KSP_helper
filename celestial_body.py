@@ -1,147 +1,448 @@
-from math import *
+from math import pi
 import numpy as np
+from numpy import cos, sin, sqrt, power, square, arctan2, arccos, arcsin, arcsinh, radians, degrees
 import matplotlib.pyplot as plt
 import sys
 from scipy.optimize import *
+
+atan2 = arctan2
+acos = arccos
+asin = arcsin
+asinh = arcsinh
+
+
 def _keplerEq(E, eccentricity, mean_anomaly):
-    return E - eccentricity*sin(E) - mean_anomaly
+    return E - eccentricity * sin(E) - mean_anomaly
+
+
 def _keplerEqPrime(E, eccentricy, mean_anomaly):
-    return 1 - eccentricy*cos(E)
+    return 1 - eccentricy * cos(E)
+
+
 def _keplerEqPrime2(E, eccentricity, mean_anomaly):
     return eccentricity * sin(E)
 
 
+def _TransformCoordinates(mat, vec):
+    return mat.dot(vec)
+
+
+def _VectorRotateOriginAxis(vec, unit_dir_vector, theta):
+    u, v, w = unit_dir_vector
+    x, y, z = vec
+    cos_theta = cos(theta)
+    sin_theta = sin(theta)
+    P = (u * x + v * y + w * z) * (1 - cos_theta)
+    res = np.array([
+        u * P + x * cos_theta + (-w * y + v * z) * sin_theta,
+        v * P + y * cos_theta + (w * x - u * z) * sin_theta,
+        w * P + z * cos_theta + (-v * x + u * y) * sin_theta
+    ])
+    return res
+
+
+def _VectorRotateX(vec, theta):
+    mat = np.array([[1, 0, 0],
+                    [0, cos(theta), -sin(theta)],
+                    [0, sin(theta), cos(theta)]])
+    return mat.dot(vec)
+
+
+def _VectorRotateY(vec, theta):
+    mat = np.array([[cos(theta), 0, -sin(theta)],
+                    [0, 1, 0],
+                    [sin(theta), 0, cos(theta)]])
+    return mat.dot(vec)
+
+
+def _VectorRotateZ(vec, theta):
+    mat = np.array([[cos(theta), -sin(theta), 0],
+                    [sin(theta), cos(theta), 0],
+                    [0, 0, 1]])
+    print(mat)
+    return mat.dot(vec)
+
+
+class Anomaly(float):
+    """
+    Anomaly class
+    """
+
+    @staticmethod
+    def FromDegrees(deg):
+        """
+        :param deg: degrees
+        :return: anomaly in radians
+        :rtype: Anomaly
+        """
+        return Anomaly(radians(deg))
+
+    def ToDegrees(self):
+        return degrees(self)
+
+    def ModulateFullCircle(self):
+        """
+        Modulates value to [0, 2*pi) interval
+        :return: Modulated anomaly
+        """
+        return type(self)(self % (2 * pi))
+
+    def ModulateBidirectional(self):
+        """
+        Modulates value to (-pi, pi] interval
+        :return: Modulated anomaly
+        """
+        p = self % (2 * pi)
+        if p > pi:
+            p -= 2 * pi
+        type(self)(p)
+
+
+class TrueAnomaly(Anomaly):
+    """
+    True Anomaly class
+    """
+
+
+class EccentricAnomaly(Anomaly):
+    """
+    True Anomaly class
+    """
+
+
+class MeanAnomaly(Anomaly):
+    """
+    Mean anomaly class
+    """
+
+
 class CelestialOrbit:
-    def __init__(self, celestial_parent_body, inclination, longitude_ascending_node, argument_periapsis, eccentricity = None, semimajoraxis = None, periapsis = None, apoapsis = None):
-        if (eccentricity is not None and semimajoraxis is not None) ^ (periapsis is not None and apoapsis is not None):
-            if eccentricity is not None and semimajoraxis is not None:
-                self.e = eccentricity
-                self.sma = semimajoraxis
-            else:
-                self.e = (apoapsis - periapsis) / (apoapsis + periapsis)
-                self.sma = (apoapsis + periapsis) / 2
-            self.parent = celestial_parent_body
-            self.i = inclination
-            self.long_asc_node = longitude_ascending_node
-            self.arg_peri = argument_periapsis
-            self.mean_motion = sqrt(self.parent.mu / self.sma**3.)
-        else:
-            raise TypeError("Incorrect amount of orbital variables")
+    """
+    An orbit around a given celestial body. Multiple bodies can use the same orbit.
+    It contains all elements apart from the anomaly
+
+    Attributes
+    ----------
+    e: eccentricity
+    sma: semi major axis
+    parent: central body
+    i: inclination
+    long_asc_node: longitude of ascending node
+    arg_per: argument of periapsis
+    mean_motion: mean motion
+    """
+
+    def __init__(self, celestial_parent_body, inclination, longitude_ascending_node, argument_periapsis,
+                 eccentricity=None, semimajoraxis=None, semilatusrectum=None, periapsis=None, apoapsis=None):
+        """
+        Creates an orbit around a given celestial body. Multiple bodies can use the same orbit.
+        It contains all elements apart from the anomaly
+        Either provide both eccentricity & semimajoraxis or periapsis & apoapsis
+        The two that are not given are calculated from the others
+        :type celestial_parent_body: CelestialBody
+        :type inclination: float
+        :type longitude_ascending_node: float
+        :type argument_periapsis: float
+        :type eccentricity: float
+        :type semimajoraxis: float
+        :type semilatusrectum: float
+        :type periapsis: float
+        :type apoapsis: float
+
+        :param celestial_parent_body: Parent body
+        :param inclination: Inclination
+        :param longitude_ascending_node: Longitude of ascending node
+        :param argument_periapsis: Argument of periapsis
+        :param eccentricity: Eccentricity
+        :param semimajoraxis: Semimajor axis
+        :param semilatusrectum: semilatus rectum
+        :param periapsis: Periapsis
+        :param apoapsis: Apoapsis
+        :return: Celestial orbit
+        """
+        self.setOrbitSize(eccentricity, semimajoraxis, semilatusrectum, periapsis, apoapsis)
+        self.parent = celestial_parent_body
+        self.__i = inclination
+        self.__long_asc_node = longitude_ascending_node
+        self.__arg_peri = argument_periapsis
+        self.__UpdateConvMats()
+
     def __repr__(self):
         return "CelestialOrbit(celestial_parent_body=%s, inclination=%r, longitude_ascending_node=%r, argument_periapsis = %r, eccentricity=%r, semimajoraxis = %r)" \
-            % (self.parent, self.i, self.long_asc_node, self.arg_peri, self.e, self.sma)
-
+               % (self.parent, self.inclination, self.long_asc_node, self.arg_peri, self.e, self.sma)
 
     def OrbitalPeriod(self):
-        return 2 * pi * sqrt(self.sma ** 3/self.parent.mu)
+        """
+        T = 2*pi * sqrt(a^3 / mu)
+        :rtype: float
+        :return: Period
+        :rtype: float
+        """
+        return 2 * pi * sqrt(self.sma ** 3 / self.parent.mu)
 
     def SpecificOrbitalEnergy(self):
-        return -self.parent.mu / ( 2 * self.sma)
+        """
+        E = -mu/(2*a)
+        :return: Specific Orbital energy [Joule]
+        :rtype: float
+        """
+        return -self.parent.mu / (2 * self.sma)
 
     def VisViva(self, radius):
-        return sqrt(2/radius - 1 / self.sma)
+        """
+        Returns speed given a distance
+
+        :param radius: Radius
+        :type radius: float
+        :rtype: float
+        :return: speed
+        """
+        return sqrt(2 / radius - 1 / self.sma)
 
     def RadiusFromTrueAnomaly(self, nu):
-        return self.sma * (1. - self.e**2.) / (1 + self.e * cos(nu))
+        """
+        :param nu: True anomaly
+        :type nu: TrueAnomaly
+        :return: Radius
+        :rtype: float
+        """
+        return self.semi_latus_rectum / (1 + self.e * cos(nu))
+
     def RadiusFromEccentricAnomaly(self, E):
-        return self.sma * ( 1 - self.e - cos(E))
-    def TrueFromEccentricAnomaly(self, E):
+        """
+        :param E: Eccentric anomaly
+        :type E: EccentricAnomaly
+        :return: Radius
+        :rtype: float
+        """
+        return self.sma * (1 - self.e - cos(E))
+
+    def ToTrueAnomaly(self, theta):
+        """
+        :param theta: Anomaly
+        :type theta: Anomaly
+        :return: True Anomaly
+        :rtype: TrueAnomaly
+        """
+        if isinstance(theta, EccentricAnomaly):
+            return self.TrueAnomalyFromEccentricAnomaly(theta)
+        elif isinstance(theta, MeanAnomaly):
+            return self.TrueAnomalyFromEccentricAnomaly(self.EccentricFromMeanAnomaly(theta))
+        else:
+            return TrueAnomaly(theta)
+
+    def TrueAnomalyFromEccentricAnomaly(self, E):
+        """
+        :param E: Eccentric Anomaly
+        :type E: EccentricAnomaly
+        :return: True Anomaly
+        :rtype: TrueAnomaly
+        """
         if self.e == 0:
             return E
-        return 2 * atan2(sqrt(1+self.e) * sin(E/2), sqrt(1 - self.e) * cos(E/2))
+        try:
+            return TrueAnomaly(2 * atan2(sqrt(1 + self.e) * sin(E / 2), sqrt(1 - self.e) * cos(E / 2)))
+        except TypeError:
+            return np.array(2 * atan2(sqrt(1 + self.e) * sin(E / 2), sqrt(1 - self.e) * cos(E / 2)))
+
+    def ToEccentricAnomaly(self, theta):
+        """
+        :param theta: Anomaly
+        :type theta: Anomaly
+        :return: Eccentric Anomaly
+        :rtype: EccentricAnomaly
+        """
+        if isinstance(theta, TrueAnomaly):
+            return self.EccentricFromTrueAnomaly(theta)
+        elif isinstance(theta, MeanAnomaly):
+            return self.EccentricFromMeanAnomaly(theta)
+        else:
+            return EccentricAnomaly(theta)
+
     def EccentricFromTrueAnomaly(self, nu):
+        """
+        :type nu: TrueAnomaly
+        :param nu: True anomaly
+        :return: Eccentric Anomaly
+        :rtype: EccentricAnomaly
+        """
         if self.e == 0:
             return nu
-        return 2 * atan2(sqrt(1 - self.e) * sin(nu/2), sqrt(1 + self.e) * cos(nu/2))
-    def MeanFromEccentricAnomaly(self, E):
-        return E - self.e * sin(E)
-    def EccentricFromMeanAnomaly(self, M):
-        #0 = E + e * sin(E) - M
+        return 2 * atan2(sqrt(1 - self.e) * sin(nu / 2), sqrt(1 + self.e) * cos(nu / 2))
 
-        guess = M
-        is_negative = True
+    def _EccentricFromMeanAnomalyNewtonMethod(self, M):
+        """
+        Gets the Eccentric anomaly from mean anomaly using Newton's numerical root finding
+        :type M: MeanAnomaly
+        :param M: Mean anomaly
+        :return: Eccentric Anomaly
+        :rtype: EccentricAnomaly
+        """
+
+        # 0 = E + e * sin(E) - M
+        is_negative = False
         ecc = self.e
         if ecc == 0:
             return M
 
-
+        M %= 2 * pi
+        if M >= pi:
+            M = M - 2 * pi
+        elif M < -pi:
+            M = 2 * pi + M
         if ecc < .3:
-            guess = atan2( sin( M), cos( M) - ecc)
+            guess = atan2(sin(M), cos(M) - ecc)
         else:
             if M < 0.:
                 M = -M
-                is_negative = False
-
+                is_negative = True
+            guess = M
             if ecc > .8 and M < pi / 3. or ecc > 1.:
-                trial = M / abs( 1. - ecc)
+                trial = M / abs(1. - ecc)
 
                 if trial * trial > 6. * abs(1. - ecc):
                     if M < pi:
-                        trial = ( 6. * M) ** (1./3.)
+                        trial = (6. * M) ** (1. / 3.)
                     else:
-                        trial = asinh( M / ecc)
+                        trial = asinh(M / ecc)
                 guess = trial
 
-        E = newton(_keplerEq, guess, fprime = _keplerEqPrime, fprime2= _keplerEqPrime2 , args=(self.e, M), maxiter = 10)
+        try:
+            # E = newton(_keplerEq, guess, fprime = _keplerEqPrime, fprime2= _keplerEqPrime2 , args=(self.e, M), maxiter = 100)
+            E = newton(_keplerEq, guess, fprime=_keplerEqPrime, args=(self.e, M), maxiter=1000000)
+        except RuntimeError as e:
+            print("Failed")
+            print(repr(self))
+            print(-M if is_negative else M, e)
+            raise
+
         return -E if is_negative else E
+
+    def EccentricFromMeanAnomaly(self, M):
+        """
+        Gets the Eccentric anomaly from mean anomaly using Brent's numerical root finding
+        :type M: MeanAnomaly
+        :param M: Mean anomaly
+        :return: Eccentric Anomaly
+        :rtype: EccentricAnomaly
+        """
+        try:
+            n = M // pi
+
+            if M == 0: return 0
+            if M == pi: return pi
+            E = brentq(_keplerEq, n * pi, (n + 1) * pi, args=(self.e, M), maxiter=1000, disp=True,
+                       xtol=np.finfo(float).eps)
+            # E = newton(_keplerEq, guess, fprime = _keplerEqPrime, args=(self.e, M), maxiter = 100)
+        except RuntimeError as e:
+            print("Failed")
+            print(repr(self))
+            print(M, e)
+            raise
+        except ValueError as e:
+            print(M, n * pi, (n + 1) * pi)
+            print(_keplerEq(0, self.e, M), _keplerEq(-pi, self.e, M), _keplerEq(pi, self.e, M))
+            print(repr(self))
+            raise
+        return E
+
+    def ToMeanAnomaly(self, theta):
+        """
+        :type theta: Anomaly
+        :param theta: Anomaly
+        :return: Mean Anomaly
+        :rtype: MeanAnomaly
+        """
+        if isinstance(theta, EccentricAnomaly):
+            return self.MeanFromEccentricAnomaly(theta)
+        elif isinstance(theta, TrueAnomaly):
+            return self.MeanFromEccentricAnomaly(self.EccentricFromTrueAnomaly(theta))
+        else:
+            return MeanAnomaly(theta)
+
+    def MeanFromEccentricAnomaly(self, E):
+        """
+        :type E: EccentricAnomaly
+        :param E: Eccentric anomaly
+        :return: Mean Anomaly
+        :rtype: MeanAnomaly
+        """
+        return E - self.e * sin(E)
+
     def InShadow(self, solar_anomaly):
-        avg_theta = (solar_anomaly + pi) %  (2 * pi)
+        """
+        :param solar_anomaly: Solar direction
+        :type solar_anomaly: Anomaly
+        :rtype: (TrueAnomaly, TrueAnomaly)
+        :return: Start and ending true anomly of the shadow
+        """
+        avg_theta = (solar_anomaly + pi) % (2 * pi)
         R_body = self.parent.radius
 
         def func(theta):
-            r = self.Radius(avg_theta + theta)
+            r = self.RadiusFromTrueAnomaly(avg_theta + theta)
             return abs(r * sin(theta)) - R_body
 
-        tol = 1.48e-8
+        tol = 1.48e-9
+        try:
+            if abs(func(0)) < tol:
+                t2 = avg_theta
+                t1 = avg_theta
+            elif abs(func(pi / 2)) < tol:
+                t1 = avg_theta + pi / 2
+                t2 = avg_theta + brentq(func, 0, - pi / 2)
+            elif abs(func(-pi / 2) < tol):
+                t1 = avg_theta + brentq(func, 0, pi / 2)
+                t2 = avg_theta - pi / 2
+            else:
+                t2 = avg_theta + brentq(func, 0, - pi / 2)
+                t1 = avg_theta + brentq(func, 0, + pi / 2)
+        except ValueError as err:
+            print("input: ", avg_theta)
+            print("bounds: ", func(-pi / 2), func(pi / 2), 0)
+            raise
 
-        if abs(func(0)) < tol:
-            print(0, func(0))
-            t2 = avg_theta
-            t1 = avg_theta
-        elif abs(func(pi/2)) < tol:
-            t1 =  avg_theta + pi/2
-            t2 = avg_theta + brentq(func, 0, - pi/2, rtol=tol)
-        elif abs(func(-pi/2) < tol ):
-            t1 = avg_theta + brentq(func, 0, pi/2, rtol=tol)
-            t2 = avg_theta -pi/2
-        else:
-            try:
-                t2 = avg_theta + brentq(func, 0, - pi/2, rtol=tol)
-                t1 = avg_theta + brentq(func, 0, + pi/2, rtol = tol)
-            except ValueError as err:
-                print(func(pi/2))
-                print("-------------------------------")
-                x = np.linspace(-pi, pi, 1E5)
-                y=np.array([func(tx) for tx in x])
-                plt.plot(x,y)
-                plt.show()
-                raise
-
-        theta = (t2 , t1 )
+        theta = (t2, t1)
         return theta
+
     def TimeInShadow(self, solar_anomaly):
+        """
+        :param solar_anomaly: Solar direction
+        :type solar_anomaly: Anomaly
+        :rtype: float
+        :return: Start and ending true anomly of the shadow
+        """
         theta = self.InShadow(solar_anomaly)
 
-        if theta[1] >= 2*pi:
-            theta = (theta[0] - 2*pi, theta[1] - 2*pi)
+        if theta[1] >= 2 * pi:
+            theta = (theta[0] - 2 * pi, theta[1] - 2 * pi)
         E = tuple(self.EccentricFromTrueAnomaly(t) for t in theta)
         M = tuple(self.MeanFromEccentricAnomaly(t) for t in E)
 
-        res = tuple(t/self.mean_motion for t in M)
-        #print(theta,E,M, t)
-        return res[1]-res[0]
+        res = tuple(t / self.mean_motion for t in M)
+        return res[1] - res[0]
 
     def MaxTimeInShadow(self):
+        """
+        Returns maximum time in shadow.
+        Numerical solution, for standard orbits TimeInShadow(0) might be faster
+        :return: time
+        :rtype: float
+        """
         if self.e == 0:
             return (0, self.TimeInShadow(0))
-        min_obj = minimize_scalar(lambda x: -self.TimeInShadow(x), bounds=(0,pi),method="bounded")
+        min_obj = minimize_scalar(lambda x: -self.TimeInShadow(x), bounds=(0, pi), method="bounded")
         return min_obj.x, self.TimeInShadow(min_obj.x)
 
     def TotalMaxTimeInShadow(self):
+        """
+        Returns total max time in shadow
+        Iterativelly calls MaxTimeInShadow for each orbit until star is found
+        :return: time
+        :rtype: float
+        """
         orbit = self
         total_time = orbit.MaxTimeInShadow()[1]
-        #print("base", total_time,total_time)
-
 
         p = orbit.parent
         orbit = orbit.parent.orbit
@@ -149,17 +450,134 @@ class CelestialOrbit:
         while isinstance(orbit.parent, CelestialBody_Orbitting) and orbit.parent.orbit != None:
             t = orbit.MaxTimeInShadow()
             total_time += t[1]
-            #print(str(p), t[1],total_time)
             p = orbit.parent
             orbit = orbit.parent.orbit
 
         return total_time
-    def Radius(self, theta):
-        return self.sma * (1 - self.e ** 2.) / (1 + self.e * cos(theta))
+
+    def PythagoralDistance(self, nu1, nu2):
+        """
+        :type nu1: TrueAnomaly
+        :param nu1: Anomaly first object
+        :param nu2: Anomaly second object
+        :type nu2: TrueAnomaly
+        :return: Distance between objects
+        :rtype: float
+        """
+        p1 = self.TrueAnomalyToPositionVector(nu1)
+        p2 = self.TrueAnomalyToPositionVector(nu2)
+        return np.linalg.norm(p1 - p2)
+
+    def TrueAnomalyToPositionVector(self, nu):
+        """
+        :param nu: TrueAnomaly
+        :type nu: TrueAnomaly
+        :return: Vector
+        :rtype: np.multiarray.ndarray
+        """
+        r_abs = self.RadiusFromTrueAnomaly(nu)
+        r_rotated = np.array([r_abs * cos(nu), r_abs * sin(nu), 0])
+        r = self.__local_to_global_mat.dot(r_rotated)
+        r = np.squeeze(np.vstack(r).T)
+        return r
+
+    def TrueAnomalyToVelocityVector(self, nu):
+        v_inplane = sqrt(self.parent.mu/self.__semi_latus_rectum) * np.array([-sin(nu), self.e + cos(nu), 0])
+        v = np.identity(3).dot(v_inplane)
+        #v = self.__local_to_global_mat.dot(v_inplane)
+        return np.squeeze(np.vstack(v).T)
+
+    def setOrbitSize(self, eccentricity=None, semimajoraxis=None, semilatusrectum=None, periapsis=None, apoapsis=None):
+        t = [eccentricity is not None, semimajoraxis is not None, semilatusrectum is not None, periapsis is not None,
+             apoapsis is not None]
+        str = "Incorrect amount of orbital variables"
+        if sum(t) != 2:
+            raise TypeError(str)
+        if eccentricity is not None:
+            self.__e = eccentricity
+            if semilatusrectum is not None:
+                self.__semi_latus_rectum = semilatusrectum
+            elif semimajoraxis is not None:
+                self.sma = semimajoraxis
+            elif apoapsis is not None:
+                self.sma = semimajoraxis
+            elif periapsis is not None:
+                self.__semi_latus_rectum = periapsis * (eccentricity + 1)
+            else:
+                raise TypeError(str)
+        elif semilatusrectum is not None:
+            if periapsis is not None:
+                self.__e = semilatusrectum / periapsis - 1
+                raise TypeError(str)
+        elif semimajoraxis is not None:
+            self.sma = semimajoraxis
+            if apoapsis is not None:
+                periapsis = 2 * semimajoraxis - apoapsis
+            if periapsis is not None:
+                self.__e = 1 - periapsis / semimajoraxis
+            else:
+                raise TypeError(str)
+
+    @property
+    def inclination(self):
+        return self.__i
+
+    @property
+    def long_asc_node(self):
+        return self.__long_asc_node
+
+    @property
+    def arg_peri(self):
+        return self.__arg_peri
+
+    @property
+    def sma(self):
+        return self.semi_latus_rectum / (1 - self.e ** 2)
+
+    @sma.setter
+    def sma(self, value):
+        self.semi_latus_rectum = value * (1 - self.e ** 2)
+
+    @property
+    def semi_latus_rectum(self):
+        return self.__semi_latus_rectum
+
+    @semi_latus_rectum.setter
+    def semi_latus_rectum(self, val):
+        self.__semi_latus_rectum = val
+
+    @property
+    def e(self):
+        return self.__e
+
+    @e.setter
+    def e(self, val):
+        self.__e = val
+
+    @property
+    def mean_motion(self):
+        return sqrt(self.parent.mu / self.sma ** 3.)
+
+    @property
+    def period(self):
+        return 2 * pi * sqrt(self.sma ** 3 / self.parent.mu)
+
+    def __UpdateConvMats(self):
+        t = np.array([[cos(self.long_asc_node), -sin(self.long_asc_node), 0],
+                      [sin(self.long_asc_node), cos(self.long_asc_node), 0],
+                      [0, 0, 1]])
+        t = t.dot([[1, 0, 0],
+                   [0, cos(self.inclination), -sin(self.inclination)],
+                   [0, sin(self.inclination), cos(self.inclination)]])
+        t = t.dot([[cos(self.arg_peri), -sin(self.arg_peri), 0],
+                   [sin(self.arg_peri), cos(self.arg_peri), 0],
+                   [0, 0, 1]])
+        self.__local_to_global_mat = t
+        self.__global_to_local_mat = t.T
 
 
-class CelestialBody:
-    def __init__(self, unique_name, mass, mu, radius, sidereal_period, atmosphere_height = 0, low_orbit_height = None):
+class CelestialBody(object):
+    def __init__(self, unique_name, mass, mu, radius, sidereal_period, atmosphere_height=0, low_orbit_height=None):
         self.mass = mass
         self.mu = mu
         self.radius = radius
@@ -174,18 +592,26 @@ class CelestialBody:
                 self.low_orbit_height = self.radius + self.atmosphere_height + 10000
         else:
             self.low_orbit_height = low_orbit_height
+
     def __repr__(self):
         return "CelestialBody(unique_name=%r, mass=%r, mu=%r, radius=%r, sidereal_period=%r, atmosphere_height=%r, low_orbit_height=%r)" \
-            % (self.name,self.mass, self.mu, self.radius, self.sidereal_period, self.atmosphere_height, self.low_orbit_height)
+               % (self.name, self.mass, self.mu, self.radius, self.sidereal_period, self.atmosphere_height,
+                  self.low_orbit_height)
+
     def __str__(self):
         return self.name
 
-
     def AppendChild(self, celestial_body):
+        """
+        Appends a satellite to the parent
+        :param celestial_body: child
+        :type celestial_body: CelestialBody
+        :rtype: None
+        """
         self.childs.add(celestial_body)
 
     def DiscardChild(self, celestial_body):
-        self.childs(celestial_body)
+        self.childs.remove(celestial_body)
 
     def SurfaceSpeed(self, longitude):
         r = self.radius * cos(radians(longitude))
@@ -198,9 +624,9 @@ class CelestialBody:
         i = 0
         long_asc = 0
         arg_peri = 0
-        #T = = 2 * pi * sqrt(a ^ 3 / mu)
-        #a = ((T/(2*pi))^2 * mu) ^ (1/3)
-        sma = ((self.sidereal_period / (2 * pi)) ** 2. * self.mu)
+        # T = = 2 * pi * sqrt(a ^ 3 / mu)
+        # a = ((T/(2*pi))^2 * mu) ^ (1/3)
+        sma = ((self.sidereal_period / (2 * pi)) ** 2. * self.mu) ** (1. / 3.)
         return CelestialOrbit(self, i, long_asc, arg_peri, eccentricity=0, semimajoraxis=sma)
 
     def CreateLowOrbit(self):
@@ -211,14 +637,9 @@ class CelestialBody:
         return CelestialOrbit(self, i, long_asc, arg_peri, eccentricity=0, semimajoraxis=sma)
 
 
-
-
-
-
-
-
 class CelestialBody_Orbitting(CelestialBody):
-    def __init__(self, unique_name, mass, mu, radius, sidereal_period, SOI_radius, atmosphere_height = 0, low_orbit_height = None, mean_anomaly_at_epoch = 0, orbit = None):
+    def __init__(self, unique_name, mass, mu, radius, sidereal_period, SOI_radius, atmosphere_height=0,
+                 low_orbit_height=None, mean_anomaly_at_epoch=0, orbit=None):
         super().__init__(unique_name, mass, mu, radius, sidereal_period, atmosphere_height, low_orbit_height)
         if orbit is None:
             self.orbit = None
@@ -228,10 +649,11 @@ class CelestialBody_Orbitting(CelestialBody):
             p.AppendChild(self)
         self.SOI = SOI_radius
         self.M0 = mean_anomaly_at_epoch
+
     def __repr__(self):
         return "CelestialBody_Orbitting(unique_name=%r, mass=%r, mu=%r, radius=%r, sidereal_period=%r, atmosphere_height=%r, low_orbit_height=%r, mean_anomaly_at_epoch = %r, \n\t orbit = %r)" \
-            % (self.name,self.mass, self.mu, self.radius, self.sidereal_period, self.atmosphere_height, self.low_orbit_height, self.M0, self.orbit)
-
+               % (self.name, self.mass, self.mu, self.radius, self.sidereal_period, self.atmosphere_height,
+                  self.low_orbit_height, self.M0, self.orbit)
 
     def getMeanAnomaly(self, time):
         return self.M0 + self.orbit.mean_motion * time
@@ -255,7 +677,16 @@ class CelestialBody_Orbitting(CelestialBody):
         p.AppendChild(self)
 
 
+def plotSphere(x, y, z, r, ax, steps=20, **kwargs):
+    # u, v = np.mgrid[0:2*pi:20j, 0:np.pi:10j]
+    # x+=r*cos(u)*sin(v)
+    # y+=r*sin(u)*sin(v)
+    # z+=r*cos(v)    #ax.plot_wireframe(x, y, z, **kwargs)
 
+    u = np.linspace(0, 2 * np.pi, steps)
+    v = np.linspace(0, np.pi, steps)
 
-
-
+    x += r * np.outer(np.cos(u), np.sin(v))
+    y += r * np.outer(np.sin(u), np.sin(v))
+    z += r * np.outer(np.ones(np.size(u)), np.cos(v))
+    ax.plot_surface(x, y, z, rstride=1, cstride=1, **kwargs)
