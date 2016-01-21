@@ -206,7 +206,7 @@ class CelestialOrbit:
         :return: Radius
         :rtype: float
         """
-        return self.semi_latus_rectum / (1 + self.e * cos(nu))
+        return self.__semi_latus_rectum / (1 + self.__e * cos(nu))
 
     def RadiusFromEccentricAnomaly(self, E):
         """
@@ -225,13 +225,13 @@ class CelestialOrbit:
         :rtype: TrueAnomaly
         """
         if isinstance(theta, EccentricAnomaly):
-            return self.TrueAnomalyFromEccentricAnomaly(theta)
+            return self.TrueFromEccentricAnomaly(theta)
         elif isinstance(theta, MeanAnomaly):
-            return self.TrueAnomalyFromEccentricAnomaly(self.EccentricFromMeanAnomaly(theta))
+            return self.TrueFromEccentricAnomaly(self.EccentricFromMeanAnomaly(theta))
         else:
             return TrueAnomaly(theta)
 
-    def TrueAnomalyFromEccentricAnomaly(self, E):
+    def TrueFromEccentricAnomaly(self, E):
         """
         :param E: Eccentric Anomaly
         :type E: EccentricAnomaly
@@ -379,27 +379,27 @@ class CelestialOrbit:
         avg_theta = (solar_anomaly + pi) % (2 * pi)
         R_body = self.parent.radius
 
-        def func(theta):
+        def shadow_func(theta):
             r = self.RadiusFromTrueAnomaly(avg_theta + theta)
             return abs(r * sin(theta)) - R_body
 
         tol = 1.48e-9
         try:
-            if abs(func(0)) < tol:
+            if abs(shadow_func(0)) < tol:
                 t2 = avg_theta
                 t1 = avg_theta
-            elif abs(func(pi / 2)) < tol:
+            elif abs(shadow_func(pi / 2)) < tol:
                 t1 = avg_theta + pi / 2
-                t2 = avg_theta + brentq(func, 0, - pi / 2)
-            elif abs(func(-pi / 2) < tol):
-                t1 = avg_theta + brentq(func, 0, pi / 2)
+                t2 = avg_theta + brentq(shadow_func, 0, - pi / 2)
+            elif abs(shadow_func(-pi / 2) < tol):
+                t1 = avg_theta + brentq(shadow_func, 0, pi / 2)
                 t2 = avg_theta - pi / 2
             else:
-                t2 = avg_theta + brentq(func, 0, - pi / 2)
-                t1 = avg_theta + brentq(func, 0, + pi / 2)
+                t2 = avg_theta + brentq(shadow_func, 0, - pi / 2)
+                t1 = avg_theta + brentq(shadow_func, 0, + pi / 2)
         except ValueError as err:
             print("input: ", avg_theta)
-            print("bounds: ", func(-pi / 2), func(pi / 2), 0)
+            print("bounds: ", shadow_func(-pi / 2), shadow_func(0), shadow_func(pi / 2))
             raise
 
         theta = (t2, t1)
@@ -429,10 +429,10 @@ class CelestialOrbit:
         :return: time
         :rtype: float
         """
-        if self.e == 0:
-            return (0, self.TimeInShadow(0))
-        min_obj = minimize_scalar(lambda x: -self.TimeInShadow(x), bounds=(0, pi), method="bounded")
-        return min_obj.x, self.TimeInShadow(min_obj.x)
+        #if self.e == 0:
+        return self.TimeInShadow(0)
+        #min_obj = minimize_scalar(lambda x: -self.TimeInShadow(x), bounds=(0, pi), method="bounded")
+        #return min_obj.x, self.TimeInShadow(min_obj.x)
 
     def TotalMaxTimeInShadow(self):
         """
@@ -441,19 +441,26 @@ class CelestialOrbit:
         :return: time
         :rtype: float
         """
-        orbit = self
-        total_time = orbit.MaxTimeInShadow()[1]
+        return sum( i[1] for i in self.GenerateShadowLightTimeList())
 
-        p = orbit.parent
-        orbit = orbit.parent.orbit
-
-        while isinstance(orbit.parent, CelestialBody_Orbitting) and orbit.parent.orbit != None:
-            t = orbit.MaxTimeInShadow()
-            total_time += t[1]
-            p = orbit.parent
-            orbit = orbit.parent.orbit
-
-        return total_time
+    def GenerateShadowLightTimeList(self):
+        """
+        Returns total max time in shadow
+        Iterativelly calls MaxTimeInShadow for each orbit until star is found
+        :return: list of (light, shadow) times
+        :rtype: [tuple(float, float)]
+        """
+        all_times=[]
+        o = self
+        try:
+            while not isinstance(o.parent, CelestialStar):
+                period = o.period
+                t = o.MaxTimeInShadow()
+                yield (period-t, t)
+                o = o.parent.orbit
+        except AttributeError:
+            pass
+        return all_times
 
     def PythagoralDistance(self, nu1, nu2):
         """
@@ -476,16 +483,15 @@ class CelestialOrbit:
         :rtype: np.multiarray.ndarray
         """
         r_abs = self.RadiusFromTrueAnomaly(nu)
-        r_rotated = np.array([r_abs * cos(nu), r_abs * sin(nu), 0])
-        r = self.__local_to_global_mat.dot(r_rotated)
-        r = np.squeeze(np.vstack(r).T)
-        return r
+        r_rotated = np.array([r_abs * cos(nu), r_abs * sin(nu), 0, 1])
+        r = self.__planar_to_local_mat.dot(r_rotated)
+        r = np.squeeze(np.vstack(r))
+        return r[:3]
 
     def TrueAnomalyToVelocityVector(self, nu):
-        v_inplane = sqrt(self.parent.mu/self.__semi_latus_rectum) * np.array([-sin(nu), self.e + cos(nu), 0])
-        v = np.identity(3).dot(v_inplane)
-        #v = self.__local_to_global_mat.dot(v_inplane)
-        return np.squeeze(np.vstack(v).T)
+        v_inplane = sqrt(self.parent.mu/self.__semi_latus_rectum) * np.array([-sin(nu), self.e + cos(nu), 0, 0])
+        v = self.__planar_to_local_mat.dot(v_inplane)
+        return np.squeeze(np.vstack(v))
 
     def setOrbitSize(self, eccentricity=None, semimajoraxis=None, semilatusrectum=None, periapsis=None, apoapsis=None):
         t = [eccentricity is not None, semimajoraxis is not None, semilatusrectum is not None, periapsis is not None,
@@ -532,7 +538,7 @@ class CelestialOrbit:
 
     @property
     def sma(self):
-        return self.semi_latus_rectum / (1 - self.e ** 2)
+        return self.__semi_latus_rectum / (1 - self.__e ** 2)
 
     @sma.setter
     def sma(self, value):
@@ -562,29 +568,63 @@ class CelestialOrbit:
     def period(self):
         return 2 * pi * sqrt(self.sma ** 3 / self.parent.mu)
 
-    def __UpdateConvMats(self):
-        t = np.array([[cos(self.long_asc_node), -sin(self.long_asc_node), 0],
-                      [sin(self.long_asc_node), cos(self.long_asc_node), 0],
-                      [0, 0, 1]])
-        t = t.dot([[1, 0, 0],
-                   [0, cos(self.inclination), -sin(self.inclination)],
-                   [0, sin(self.inclination), cos(self.inclination)]])
-        t = t.dot([[cos(self.arg_peri), -sin(self.arg_peri), 0],
-                   [sin(self.arg_peri), cos(self.arg_peri), 0],
-                   [0, 0, 1]])
-        self.__local_to_global_mat = t
-        self.__global_to_local_mat = t.T
+    @property
+    def periapsis_distance(self):
+        return self.__semi_latus_rectum / (1+self.e)
 
+    @property
+    def apoapsis_distance(self):
+        return self.__semi_latus_rectum / (1-self.__e)
+
+    def __UpdateConvMats(self):
+        t = np.array([[cos(self.long_asc_node), -sin(self.long_asc_node), 0, 0],
+                      [sin(self.long_asc_node), cos(self.long_asc_node), 0, 0],
+                      [0, 0, 1, 0],
+                      [0, 0, 0, 1]])
+        t = t.dot([[1, 0, 0, 0],
+                   [0, cos(self.inclination), -sin(self.inclination),0],
+                   [0, sin(self.inclination), cos(self.inclination),0],
+                   [0, 0, 0, 1]])
+        t = t.dot([[cos(self.long_asc_node), -sin(self.long_asc_node), 0, 0],
+                      [sin(self.long_asc_node), cos(self.long_asc_node), 0, 0],
+                      [0, 0, 1, 0],
+                      [0, 0, 0, 1]])
+        self.__planar_to_local_mat = t
+        self.__local_to_planar_mat = t.T
 
 class CelestialBody(object):
-    def __init__(self, unique_name, mass, mu, radius, sidereal_period, atmosphere_height=0, low_orbit_height=None):
+    def __init__(self, name, mass, mu, radius, sidereal_rotation_period, atmosphere_height=0., low_orbit_height=None, pos = None, current_time = 0.0, **kwargs):
+        """
+        :type name: str
+        :type mass: float
+        :type mu: float
+        :type radius: float
+        :type sidereal_rotation_period: float
+        :type atmosphere_height: float
+        :type low_orbit_height: float
+        :type pos: np.ndarray
+        :type current_time: float
+        :param name: reference
+        :param mass: mass
+        :param mu: gravitational parameter
+        :param radius: radius
+        :param sidereal_rotation_period: rotation
+        :param atmosphere_height: height atmosphere
+        :param low_orbit_height: height low orbit
+        :param pos: position in space (default = 0,0,0)
+        :param current_time: time for calculations
+        :return:
+        """
+        super().__init__(**kwargs)
         self.mass = mass
         self.mu = mu
         self.radius = radius
-        self.sidereal_period = sidereal_period
-        self.name = unique_name
+        self.sidereal_rotation_period = sidereal_rotation_period
+        self.name = name
         self.childs = set()
         self.atmosphere_height = atmosphere_height
+        self.current_time = current_time
+
         if low_orbit_height is None:
             if self.atmosphere_height == 0:
                 self.low_orbit_height = self.radius + 20000
@@ -592,10 +632,17 @@ class CelestialBody(object):
                 self.low_orbit_height = self.radius + self.atmosphere_height + 10000
         else:
             self.low_orbit_height = low_orbit_height
+        if pos is None:
+            self.__local_pos = np.array([0,0,0])
+        else:
+            self.__local_pos = np.array(pos)
+
+        self.__last_calculated_time = None
+        self.__global_pos = np.array([0,0,0])
 
     def __repr__(self):
         return "CelestialBody(unique_name=%r, mass=%r, mu=%r, radius=%r, sidereal_period=%r, atmosphere_height=%r, low_orbit_height=%r)" \
-               % (self.name, self.mass, self.mu, self.radius, self.sidereal_period, self.atmosphere_height,
+               % (self.name, self.mass, self.mu, self.radius, self.sidereal_rotation_period, self.atmosphere_height,
                   self.low_orbit_height)
 
     def __str__(self):
@@ -626,7 +673,7 @@ class CelestialBody(object):
         arg_peri = 0
         # T = = 2 * pi * sqrt(a ^ 3 / mu)
         # a = ((T/(2*pi))^2 * mu) ^ (1/3)
-        sma = ((self.sidereal_period / (2 * pi)) ** 2. * self.mu) ** (1. / 3.)
+        sma = ((self.sidereal_rotation_period / (2 * pi)) ** 2. * self.mu) ** (1. / 3.)
         return CelestialOrbit(self, i, long_asc, arg_peri, eccentricity=0, semimajoraxis=sma)
 
     def CreateLowOrbit(self):
@@ -636,11 +683,61 @@ class CelestialBody(object):
         arg_peri = 0
         return CelestialOrbit(self, i, long_asc, arg_peri, eccentricity=0, semimajoraxis=sma)
 
+    def __MakePositionDirty(self):
+        self.__last_calculated_time = None
+        for c in self.childs:
+            c.__MakePositionDirty()
+
+    def setLocalPosition(self, newpos):
+        self.__local_pos = newpos
+
+    def getLocalPositionAtTime(self, time=None):
+        return self.__local_pos
+
+    def getGlobalPositionAtTime(self, time=None, do_update = False):
+        if self.__last_calculated_time == time and time is not None:
+            return self.__global_pos
+        if time is None:
+            time = self.current_time
+        pos = self.localToGlobalPosition(self.getLocalPositionAtTime(time), time, do_update)
+        if do_update:
+            self.current_time = time
+            self.__global_pos = pos
+        return pos
+
+    def localToGlobalPosition(self, position, time = None, do_update = False):
+        try:
+            obj = self.orbit.parent
+        except AttributeError as e:
+            return position
+        if isinstance(obj, CelestialBody):
+            par_pos = obj.getGlobalPositionAtTime(time, do_update)
+            return position + par_pos
+        else:
+            return position
+
+    def clearCachedLocation(self):
+        self.__last_calculated_time = None
+
+class CelestialStar(CelestialBody):
+    def __init__(self, brightness, **kwargs):
+        super().__init__(**kwargs)
+        self.__brightness = brightness
+    @property
+    def brightness(self):
+        return self.__brightness
+
+    @brightness.setter
+    def brightness(self, value):
+        self.__brightness = value
+
+    def getPower(self, distance):
+        self.__brightness/distance**2
+
 
 class CelestialBody_Orbitting(CelestialBody):
-    def __init__(self, unique_name, mass, mu, radius, sidereal_period, SOI_radius, atmosphere_height=0,
-                 low_orbit_height=None, mean_anomaly_at_epoch=0, orbit=None):
-        super().__init__(unique_name, mass, mu, radius, sidereal_period, atmosphere_height, low_orbit_height)
+    def __init__(self, SOI_radius, mean_anomaly_at_epoch=0, orbit=None, **kwargs):
+        super().__init__(**kwargs)
         if orbit is None:
             self.orbit = None
         else:
@@ -648,22 +745,20 @@ class CelestialBody_Orbitting(CelestialBody):
             p = self.orbit.parent
             p.AppendChild(self)
         self.SOI = SOI_radius
-        self.M0 = mean_anomaly_at_epoch
-
+        self.M0 = MeanAnomaly(mean_anomaly_at_epoch)
     def __repr__(self):
         return "CelestialBody_Orbitting(unique_name=%r, mass=%r, mu=%r, radius=%r, sidereal_period=%r, atmosphere_height=%r, low_orbit_height=%r, mean_anomaly_at_epoch = %r, \n\t orbit = %r)" \
-               % (self.name, self.mass, self.mu, self.radius, self.sidereal_period, self.atmosphere_height,
+               % (self.name, self.mass, self.mu, self.radius, self.sidereal_rotation_period, self.atmosphere_height,
                   self.low_orbit_height, self.M0, self.orbit)
 
     def getMeanAnomaly(self, time):
-        return self.M0 + self.orbit.mean_motion * time
+        return self.M0 + MeanAnomaly(self.orbit.mean_motion * time)
 
     def getEccentricAnomaly(self, time):
         M = self.getMeanAnomaly(time)
         return self.orbit.EccentricFromMeanAnomaly(M)
 
     def getTrueAnomaly(self, time):
-
         M = self.getMeanAnomaly(time)
         E = self.orbit.EccentricFromMeanAnomaly(M)
         return self.orbit.TrueFromEccentricAnomaly(E)
@@ -675,6 +770,19 @@ class CelestialBody_Orbitting(CelestialBody):
         self.orbit = orbit
         p = self.orbit.parent
         p.AppendChild(self)
+
+    def getLocalPositionAtTrueAnomaly(self, true_anomaly):
+        return self.orbit.TrueAnomalyToPositionVector(true_anomaly)
+    def getLocalPositionAtTime(self, time):
+        return self.getLocalPositionAtTrueAnomaly(self.getTrueAnomaly(time))
+
+    @property
+    def orbit_period(self):
+        return self.orbit.OrbitalPeriod()
+
+class CelestialBody_OrbittingStar(CelestialBody_Orbitting, CelestialStar):
+    pass
+
 
 
 def plotSphere(x, y, z, r, ax, steps=20, **kwargs):
