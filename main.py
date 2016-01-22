@@ -14,6 +14,7 @@ import satellite
 import ksp_part_resource as KSP_PART
 import ksp_part_remotetech
 import ksp_part_squad
+import copy
 
 def FuelFraction(dV, I_sp, g0 = 9.81):
     # dv = I_sp*g0 * ln(M0/M_dry)
@@ -112,16 +113,38 @@ if __name__ == "__main__":
                                argument_periapsis=0, eccentricity=0, semimajoraxis=Mun.radius +0.0)
 
 
-    sat = satellite.satellite(sat_orbit)
-    sat.addPart(KSP_PART.ControlProbe["probeCoreOcto"])
-    for i in range(5):
-        sat.addPart(KSP_PART.Antenna["mediumDishAntenna"])
-    print(sat.orbit.MaxTimeInShadow(), sat.orbit.TimeInShadow(0) - sat.orbit.MaxTimeInShadow())
-    print(sat.getMaxAverageDistance())
-    print(sat.getMaxDistance())
-    print(sat.power)
-    print(satellite.calculate_minimal_electric_storage(sat))
-    print(satellite.calculate_minimal_charge_rate(sat))
+    techs = [
+        "basicScience",
+        "start",
+        "electrics",
+        "advElectrics",
+        "largeElectrics",
+        "experimentalElectrics",
+        "specializedElectrics"
+    ]
+
+    sat = satellite.satellite(None)
+    #sat.addPart(KSP_PART.ControlProbe["probeCoreOcto"])
+    #for i in range(5):
+    #    sat.addPart(KSP_PART.Antenna["mediumDishAntenna"])
+    #print(sat.orbit.MaxTimeInShadow(), sat.orbit.TimeInShadow(0) - sat.orbit.MaxTimeInShadow())
+    #print(sat.getMaxAverageDistance())
+    #print(sat.getMaxDistance())
+    #print(satellite.calculate_minimal_electric_storage(sat))
+    #print(satellite.calculate_minimal_charge_rate(sat))
+
+    KSP_PART.BatteryPack["batteryBank"].price = 1
+    KSP_PART.BatteryPack["batteryBank"].mass *= 1000
+
+
+    def check_battery(l, r, useful_power = np.inf):
+        left_v = (min(l.electric_charge, useful_power)/l.mass, min(l.electric_charge, useful_power)/l.price)
+        right_v = (min(r.electric_charge, useful_power)/r.mass, min(r.electric_charge, useful_power)/r.price)
+        return any(ll > rr for ll,rr in zip(left_v, right_v)) or\
+               (left_v == right_v and l.electric_charge > r.electric_charge)
+    t = copy.deepcopy(sat)
+
+    satellite.generate_all_battery_sattelites(sat,1,techs,check_battery)
 
     #print('{0:.15f}'.format((sat.getMaxDistance() / sat.getMaxAverageDistance())**2))
 

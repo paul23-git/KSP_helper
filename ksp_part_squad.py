@@ -45,35 +45,35 @@ def _loadEnergy():
                 title="Z-100 Rechargeable Battery Pack",
                 mass=0.005,
                 price=80,
-                ElectricCharge=100,
+                electric_charge=100,
                 techrequired="basicScience")
 
     BatteryPack(name="batteryBankMini",
                 title="Z-200 Rechargeable Battery Pack",
                 mass=0.01,
                 price=360,
-                ElectricCharge=200,
+                electric_charge=200,
                 techrequired="electrics")
 
     BatteryPack(name="ksp_r_largeBatteryPack",
                 title="Z-400 Rechargeable Battery Pack",
                 mass=0.02,
                 price=550,
-                ElectricCharge=400,
+                electric_charge=400,
                 techrequired="advElectrics")
 
     BatteryPack(name="batteryBank",
                 title="Z-1k Rechargeable Battery Pack",
                 mass=0.05,
                 price=880,
-                ElectricCharge=1000,
+                electric_charge=1000,
                 techrequired="largeElectrics")
 
     BatteryPack(name="batteryBankLarge",
                 title="Z-4k Rechargeable Battery Pack",
                 mass=0.2,
                 price=4500,
-                ElectricCharge=4000,
+                electric_charge=4000,
                 techrequired="specializedElectrics")
 
 

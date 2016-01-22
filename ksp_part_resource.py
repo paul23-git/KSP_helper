@@ -1,7 +1,7 @@
 __author__ = 'Paul'
 
 import copy
-from ksp_resources import ALL_RESOURCES, KSPModule
+from ksp_resources import ALL_RESOURCES, KSPModule, KSPModuleKeywords
 
 class IterPartRegistry(type):
     def __init__(cls, name, bases, attrs):
@@ -68,7 +68,9 @@ class KSPPart(object, metaclass=IterPartRegistry):
     def __getattr__(self, item):
         if item in self._resourceNameBindings:
             return self.resources[self._resourceNameBindings[item]]
-        return sum(getattr(m, item, 0) for m in self.modules)
+        if item in KSPModuleKeywords:
+            return sum(getattr(m, item, 0) for m in self.modules)
+        raise AttributeError(item)
 
     def __init__(self, name, mass, techrequired="start", title=None, price=0, extra_modules=None, resources=None, enabled=True):
         """
@@ -216,11 +218,11 @@ class BatteryPack(KSPPart):
     """
     _resourceNameBindings = copy.copy(KSPPart._resourceNameBindings)
     _resourceNameBindings.update(
-        {"ElectricCharge":"ElectricCharge"}
+        {"electric_charge":"ElectricCharge"}
     )
-    def __init__(self, name, mass, ElectricCharge, **kwds):
+    def __init__(self, name, mass, electric_charge, **kwds):
         super().__init__(name=name, mass=mass, **kwds)
-        self.resources["ElectricCharge"] = ElectricCharge
+        self.resources["ElectricCharge"] = electric_charge
 
 
 class EnergyGenerationPart(KSPPart):

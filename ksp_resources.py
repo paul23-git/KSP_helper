@@ -20,6 +20,22 @@ class KSPDict(dict):
         super().__setitem__(res.name, res)
 
 
+KSPModuleKeywords = {
+    "name",
+    "power_idle",
+    "power_active",
+    "power",
+    "nominalChargeRate",
+    "chargeRate",
+    "yawtorque",
+    "pitchtorque",
+    "rolltorque",
+    "nominalChargeDistance",
+    "sunTracking",
+    "averageMultiplier"
+}
+
+
 class KSPModule(object):
     """
     KSP module base class
