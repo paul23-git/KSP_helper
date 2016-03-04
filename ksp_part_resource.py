@@ -147,9 +147,6 @@ class KSPPart(object, metaclass=IterPartRegistry):
     def total_price(self):
         return self.price + sum(ALL_RESOURCES[k].price * v for k, v in self.resources.items())
 
-    def getChargeRate(self, distance):
-        return sum(m.getChargeRate(distance) for m in self.modules if hasattr(m,"getChargeRate"))
-
     def __hash__(self):
         return hash((self.name, type(self)))
 
@@ -229,6 +226,9 @@ class EnergyGenerationPart(KSPPart):
     def __init__(self, name, mass, ModuleEnergy, **kwargs):
         super().__init__(name=name, mass=mass, **kwargs)
         self.modules.add(copy.deepcopy(ModuleEnergy))
+
+    def getChargeRate(self, distance=0):
+        return sum(m.getChargeRate(distance) for m in self.modules if hasattr(m,"getChargeRate"))
 
 
 class Antenna(KSPPart):

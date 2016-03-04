@@ -1,8 +1,9 @@
-
+import random
 from scipy.optimize import *
 from math import *
 import matplotlib.pyplot as plt
 from celestial_body import *
+from celestial_orbit import *
 from ksp_resources import *
 from matplotlib.patches import Ellipse
 from matplotlib.patches import Circle
@@ -15,6 +16,7 @@ import ksp_part_resource as KSP_PART
 import ksp_part_remotetech
 import ksp_part_squad
 import copy
+import itertools
 
 def FuelFraction(dV, I_sp, g0 = 9.81):
     # dv = I_sp*g0 * ln(M0/M_dry)
@@ -56,8 +58,8 @@ def delta_v(payload_mass, fuel_mass, I_sp, g0=9.81):
 
 
 def Satellite_ElectricalDesign(orbit, use_power):
-    shadow_time = orbit.TotalMaxTimeInShadow()
-    light_time = orbit.OrbitalPeriod() - shadow_time
+    shadow_time = orbit.total_max_time_in_shadow()
+    light_time = orbit.orbital_period() - shadow_time
     energy = shadow_time * use_power
     solar_cell_power = energy / light_time + use_power
     return (energy, solar_cell_power)
@@ -69,25 +71,44 @@ def CommSatelliteMinPower(orbit, core, downlink_antenna, constellation_satellite
     if extra_antennas is not None:
         extra_antennas_power = sum(antenna.power for antenna in extra_antennas)
     min_obj = minimize_scalar(
-        lambda x: -orbit.PythagoralDistance(orbit.ToTrueAnomaly(MeanAnomaly(x)),
-                                            orbit.ToTrueAnomaly(
+        lambda x: -orbit.pythagoral_distance(orbit.to_true_anomaly(MeanAnomaly(x)),
+                                            orbit.to_true_anomaly(
                                                 MeanAnomaly(x - (2 * pi) / constellation_satellite_num))),
         bounds=(0, pi), method="bounded", options={'maxiter': 1000, 'xatol': np.finfo(float).eps})
     dis = (1 + distance_safety_margin) * -min_obj.fun
 
     return core.power + extra_energy + extra_antennas_power + downlink_antenna.power  # + communication_antenna.power*constellation_satellite_num
 
+
+
+class TestObj(object):
+    def __init__(self, payload=None):
+        self.__all_parts = []
+        self.payload = payload
+        self.structural_mass = 0
+
+    @property
+    def empty_mass(self):
+        return self.structural_mass + sum(part.mass for part in self.__all_parts if hasattr(part, "mass"))
+
+    @property
+    def mass(self):
+        mass = self.empty_mass
+        try:
+            mass += self.payload.mass
+        except AttributeError:
+            pass
+        return mass
+
 if __name__ == "__main__":
-    # d = {t: (0.3, 0.3, 0.3)}
-    # for key, value in d.items():
-    #    print(key(*value))
     Kerbol = CelestialStar(name="Kerbol", mass=1.7565670E28, mu=1.1723328E18, radius=261600000,
                            sidereal_rotation_period=432000, atmosphere_height=600000, brightness=1)
-    kerbin_orbit = CelestialOrbit(celestial_parent_body=Kerbol, inclination=0, longitude_ascending_node=0,
-                                  argument_periapsis=0, eccentricity=0, semimajoraxis=13599840256)
+    a = 0.1*pi
+    kerbin_orbit = CelestialOrbit(celestial_parent_body=Kerbol, inclination=0, longitude_ascending_node=a,
+                                  argument_periapsis=0, eccentricity=0.000, semimajoraxis=13599840256)
     Kerbin = CelestialBody_Orbitting(name="Kerbin", mass=5.2915793e22, mu=3.5316000e15, radius=600000,
                                      sidereal_rotation_period=21599.912, SOI_radius=84159286, atmosphere_height=70000,
-                                     mean_anomaly_at_epoch=pi, orbit=kerbin_orbit)
+                                     mean_anomaly_at_epoch=0.5, orbit=kerbin_orbit)
 
     mun_orbit = CelestialOrbit(celestial_parent_body=Kerbin, inclination=0, longitude_ascending_node=0,
                                argument_periapsis=0, eccentricity=0, semimajoraxis=12000000)
@@ -96,7 +117,7 @@ if __name__ == "__main__":
                                   mean_anomaly_at_epoch=1.7, SOI_radius=2429559.1, orbit=mun_orbit)
 
     minmus_orbit = CelestialOrbit(celestial_parent_body=Kerbin, inclination=radians(6),
-                                  longitude_ascending_node=radians(78), argument_periapsis=radians(38), eccentricity=0,
+                                  longitude_ascending_node=radians(78), argument_periapsis=radians(38), eccentricity=0.0,
                                   semimajoraxis=47000000)
     Minmus = CelestialBody_Orbitting(name="Minmus", mass=2.6457897e19, mu=1.7658000e9,
                                      radius=60000, sidereal_rotation_period=40400,
@@ -109,8 +130,8 @@ if __name__ == "__main__":
     max_minmus_orbit = CelestialOrbit(celestial_parent_body=Minmus, inclination=0, longitude_ascending_node=0,
                                       argument_periapsis=0, eccentricity=0, semimajoraxis=Minmus.SOI)
 
-    sat_orbit = CelestialOrbit(celestial_parent_body=Minmus, inclination=0, longitude_ascending_node=0,
-                               argument_periapsis=0, eccentricity=0, semimajoraxis=Mun.radius +0.0)
+    sat_orbit = CelestialOrbit(celestial_parent_body=Minmus, inclination=pi, longitude_ascending_node=pi/3,
+                               argument_periapsis=pi, eccentricity=0.99, semimajoraxis=Minmus.SOI)
 
 
     techs = [
@@ -123,30 +144,73 @@ if __name__ == "__main__":
         "specializedElectrics"
     ]
 
-    sat = satellite.satellite(None)
-    #sat.addPart(KSP_PART.ControlProbe["probeCoreOcto"])
-    #for i in range(5):
-    #    sat.addPart(KSP_PART.Antenna["mediumDishAntenna"])
-    #print(sat.orbit.MaxTimeInShadow(), sat.orbit.TimeInShadow(0) - sat.orbit.MaxTimeInShadow())
-    #print(sat.getMaxAverageDistance())
-    #print(sat.getMaxDistance())
-    #print(satellite.calculate_minimal_electric_storage(sat))
-    #print(satellite.calculate_minimal_charge_rate(sat))
+    #print(Kerbin.orbit_period/2, sat_orbit.period, (Kerbin.orbit_period/2)/sat_orbit.period)
+    #x = np.linspace(0, kerbin_orbit.period/2, 100)
+    #print(x[1] - x[0])
+    y = []
+    y2=[]
+    y3 = []
+    #fig = plt.figure()
+    #ax = fig.add_subplot("111")
+    #for i in np.nditer(x):
+    #    Kerbol.updateTimeWholeSystem(i)
+    #    y.append(minmus_orbit.get_max_distance_non_recursive(Kerbol))
+    #    y2.append(sat_orbit.get_max_distance_non_recursive(Kerbol))
+    #    y3.append(minmus_orbit.get_average_distance_current_time())
 
-    KSP_PART.BatteryPack["batteryBank"].price = 1
-    KSP_PART.BatteryPack["batteryBank"].mass *= 1000
+    #ax.plot(x,np.array(y3))
+    #ax.plot(x,np.array(y))
+    #ax.plot(x,np.array(y2))
+    print("----------")
+    for i in range(1):
+        sat_orbit.get_total_max_distance(Kerbol, eps=0.00001)
+    #ax.set_ylim([0, ax.get_ylim()[1]])
+    #plt.show()
+    exit()
 
 
-    def check_battery(l, r, useful_power = np.inf):
-        left_v = (min(l.electric_charge, useful_power)/l.mass, min(l.electric_charge, useful_power)/l.price)
-        right_v = (min(r.electric_charge, useful_power)/r.mass, min(r.electric_charge, useful_power)/r.price)
-        return any(ll > rr for ll,rr in zip(left_v, right_v)) or\
-               (left_v == right_v and l.electric_charge > r.electric_charge)
-    t = copy.deepcopy(sat)
 
-    satellite.generate_all_battery_sattelites(sat,1,techs,check_battery)
 
-    #print('{0:.15f}'.format((sat.getMaxDistance() / sat.getMaxAverageDistance())**2))
+    sat = satellite.satellite(orbit=sat_orbit)
 
+    sat.addPart(KSP_PART.ControlProbe["probeCoreOcto"])
+    for i in range(5):
+        sat.addPart(KSP_PART.Antenna["mediumDishAntenna"])
+    print(sat.orbit.max_time_in_shadow(), sat.orbit.time_in_shadow(0) - sat.orbit.max_time_in_shadow())
+    print(sat.getMaxAverageDistance())
+    print(sat.getMaxDistance())
+    #KSP_PART.BatteryPack["batteryPack"].price = 90
+    #KSP_PART.BatteryPack["batteryBank"].mass *= 1000
+
+    def check_battery(l, r, useful_storage = np.inf):
+        left_power = min(l.electric_charge, useful_storage)
+        right_power = min(r.electric_charge, useful_storage)
+        left_v = (left_power/l.mass, left_power/l.price, left_power)
+        right_v = (right_power/r.mass, right_power/r.price, right_power)
+        t = any(ll > rr for ll,rr in zip(left_v, right_v))
+        return t
+
+    def check_solar_cell(l, r, distance, useful_power = np.inf):
+        left_power = min(l.getChargeRate(distance), useful_power)
+        right_power = min(r.getChargeRate(distance), useful_power)
+        left_v = (left_power/l.mass, left_power/l.price, left_power)
+        right_v = (right_power/r.mass, right_power/r.price, right_power)
+        t = any(ll > rr for ll,rr in zip(left_v, right_v))
+        return t
+
+
+    power_requirements = satellite.calculate_minimal_charge_rate(sat)
+    print(power_requirements)
+    all_copies = satellite.generate_all_solar_cells(sat, techs, power_requirements, first_order_check=check_solar_cell)
+
+    #for i in range(1):
+    #    energy_storage_requirements = satellite.calculate_minimal_electric_storage(sat)
+    #    #print(energy_storage_requirements)
+    #    all_copies = satellite.generate_all_battery(sat,techs, energy_storage_requirements, check_battery)
+    print(len(all_copies))
+    for s in all_copies:
+        print({"mass:": s.mass, "price":s.price})
+        for p in s._all_parts:
+            print(" - ", p.title)
 
     print("done")
