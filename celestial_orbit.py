@@ -2,10 +2,7 @@ from math import pi
 import numpy as np
 import math as m
 from numpy import cos, sin, sqrt, power, square, arctan2, arccos, arcsin, arcsinh, radians, degrees
-import matplotlib.pyplot as plt
 from scipy.optimize import *
-import scipy as sp
-import celestial_body as CB
 import typing
 
 __author__ = 'Paul'
@@ -15,25 +12,26 @@ asin = arcsin
 asinh = arcsinh
 
 
+
 #CelestialBody_Type = typing.TypeVar("CelestialBody_Type", "CB.CelestialBody", np.ndarray)
 
-def _keplerEq(E, eccentricity, mean_anomaly):
+def _keplerEq(E:float, eccentricity:float, mean_anomaly:float) -> float:
     return E - eccentricity * sin(E) - mean_anomaly
 
 
-def _keplerEqPrime(E, eccentricy, mean_anomaly):
+def _keplerEqPrime(E:float, eccentricy:float, mean_anomaly:float) -> float:
     return 1 - eccentricy * cos(E)
 
 
-def _keplerEqPrime2(E, eccentricity, mean_anomaly):
+def _keplerEqPrime2(E:float, eccentricity:float, mean_anomaly:float) -> float:
     return eccentricity * sin(E)
 
 
-def _TransformCoordinates(mat, vec):
+def _TransformCoordinates(mat:np.ndarray, vec:np.ndarray) -> np.ndarray:
     return mat.dot(vec)
 
 
-def _VectorRotateOriginAxis(vec, unit_dir_vector, theta):
+def _VectorRotateOriginAxis(vec:np.ndarray, unit_dir_vector:np.ndarray, theta:float) -> np.ndarray:
     u, v, w = unit_dir_vector
     x, y, z = vec
     cos_theta = cos(theta)
@@ -47,25 +45,24 @@ def _VectorRotateOriginAxis(vec, unit_dir_vector, theta):
     return res
 
 
-def _VectorRotateX(vec, theta):
+def _VectorRotateX(vec:np.ndarray, theta:float)->np.ndarray:
     mat = np.array([[1, 0, 0],
                     [0, cos(theta), -sin(theta)],
                     [0, sin(theta), cos(theta)]])
     return mat.dot(vec)
 
 
-def _VectorRotateY(vec, theta):
+def _VectorRotateY(vec:np.ndarray, theta:float) -> np.ndarray:
     mat = np.array([[cos(theta), 0, -sin(theta)],
                     [0, 1, 0],
                     [sin(theta), 0, cos(theta)]])
     return mat.dot(vec)
 
 
-def _VectorRotateZ(vec, theta):
+def _VectorRotateZ(vec:np.ndarray, theta:float) -> np.ndarray:
     mat = np.array([[cos(theta), -sin(theta), 0],
                     [sin(theta), cos(theta), 0],
                     [0, 0, 1]])
-    print(mat)
     return mat.dot(vec)
 
 
@@ -74,19 +71,19 @@ class Anomaly(float):
     Anomaly class
     """
 
-    @staticmethod
-    def FromDegrees(deg):
+    @classmethod
+    def FromDegrees(cls, deg:float) -> "Anomaly":
         """
         :param deg: degrees
         :return: anomaly in radians
         :rtype: Anomaly
         """
-        return Anomaly(radians(deg))
+        return cls(radians(deg))
 
-    def ToDegrees(self):
+    def ToDegrees(self) -> float:
         return degrees(self)
 
-    def ModulateFullCircle(self):
+    def ModulateFullCircle(self) -> "Anomaly":
         """
         Modulates value to [0, 2*pi) interval
         :return: Modulated anomaly
@@ -123,8 +120,9 @@ class MeanAnomaly(Anomaly):
 
 
 class CelestialOrbit:
-    def __init__(self, celestial_parent_body, inclination, longitude_ascending_node, argument_periapsis,
-                 eccentricity=None, semimajoraxis=None, semilatusrectum=None, periapsis=None, apoapsis=None):
+    def __init__(self, celestial_parent_body:"CB.CelestialBody", inclination:float,
+                 longitude_ascending_node:float, argument_periapsis:float, eccentricity:float=None,
+                 semimajoraxis:float=None, semilatusrectum:float=None, periapsis:float=None, apoapsis:float=None):
         """
         Creates an orbit around a given celestial body. Multiple bodies can use the same orbit.
         It contains all elements apart from the anomaly
@@ -151,27 +149,26 @@ class CelestialOrbit:
         :param apoapsis: Apoapsis
         :return: Celestial orbit
         """
-        self._set_orbit_shape(eccentricity, semimajoraxis, semilatusrectum, periapsis, apoapsis)
-        self.parent = celestial_parent_body
-        self.__i = inclination
-        self.__long_asc_node = longitude_ascending_node
-        self.__arg_peri = argument_periapsis
+        self._set_orbit_shape(eccentricity, semimajoraxis, semilatusrectum, periapsis, apoapsis) #type:float
+        self.parent = celestial_parent_body #type:CB.CelestialBody
+        self.__i = inclination #type:float
+        self.__long_asc_node = longitude_ascending_node #type:float
+        self.__arg_peri = argument_periapsis #type:float
         self.__UpdateConvMats()
 
     def __repr__(self):
         return "CelestialOrbit(celestial_parent_body=%s, inclination=%r, longitude_ascending_node=%r, argument_periapsis = %r, eccentricity=%r, semimajoraxis = %r)" \
                % (self.parent, self.inclination, self.long_asc_node, self.arg_peri, self.e, self.semi_major_axis)
 
-    def orbital_period(self):
+    def orbital_period(self) -> float:
         """
         T = 2*pi * sqrt(a^3 / mu)
-        :rtype: float
         :return: Period
         :rtype: float
         """
         return 2 * pi * sqrt(self.semi_major_axis ** 3 / self.parent.mu)
 
-    def specific_orbital_energy(self):
+    def specific_orbital_energy(self) -> float:
         """
         E = -mu/(2*a)
         :return: Specific Orbital energy [Joule]
@@ -179,7 +176,7 @@ class CelestialOrbit:
         """
         return -self.parent.mu / (2 * self.semi_major_axis)
 
-    def vis_via(self, radius):
+    def vis_viva(self, radius:float) -> float:
         """
         Returns speed given a distance
 
@@ -190,7 +187,7 @@ class CelestialOrbit:
         """
         return sqrt(2 / radius - 1 / self.semi_major_axis)
 
-    def radius_from_true_anomaly(self, nu):
+    def radius_from_true_anomaly(self, nu:float) -> float:
         """
         :param nu: True anomaly
         :type nu: TrueAnomaly
@@ -199,7 +196,7 @@ class CelestialOrbit:
         """
         return self.semi_latus_rectum / (1 + self.e * cos(nu))
 
-    def radius_from_eccentric_anomaly(self, E):
+    def radius_from_eccentric_anomaly(self, E:float) -> float:
         """
         :param E: Eccentric anomaly
         :type E: EccentricAnomaly
@@ -208,7 +205,7 @@ class CelestialOrbit:
         """
         return self.semi_major_axis * (1 - self.e * cos(E))
 
-    def to_true_anomaly(self, theta):
+    def to_true_anomaly(self, theta:float) -> TrueAnomaly:
         """
         :param theta: Anomaly
         :type theta: Anomaly
@@ -222,7 +219,7 @@ class CelestialOrbit:
         else:
             return TrueAnomaly(theta)
 
-    def true_from_eccentric_anomaly(self, E):
+    def true_from_eccentric_anomaly(self, E:float) -> EccentricAnomaly:
         """
         :param E: Eccentric Anomaly
         :type E: EccentricAnomaly
@@ -236,7 +233,7 @@ class CelestialOrbit:
         except TypeError:
             return np.array(2 * atan2(sqrt(1 + self.e) * sin(E / 2), sqrt(1 - self.e) * cos(E / 2)))
 
-    def to_eccentric_anomaly(self, theta):
+    def to_eccentric_anomaly(self, theta:float) -> EccentricAnomaly:
         """
         :param theta: Anomaly
         :type theta: Anomaly
@@ -250,7 +247,7 @@ class CelestialOrbit:
         else:
             return EccentricAnomaly(theta)
 
-    def eccentric_from_true_anomaly(self, nu):
+    def eccentric_from_true_anomaly(self, nu:float) -> EccentricAnomaly:
         """
         :type nu: TrueAnomaly
         :param nu: True anomaly
@@ -261,7 +258,7 @@ class CelestialOrbit:
             return nu
         return 2 * atan2(sqrt(1 - self.e) * sin(nu / 2), sqrt(1 + self.e) * cos(nu / 2))
 
-    def _EccentricFromMeanAnomalyNewtonMethod(self, M):
+    def _EccentricFromMeanAnomalyNewtonMethod(self, M:float) -> EccentricAnomaly:
         """
         Gets the Eccentric anomaly from mean anomaly using Newton's numerical root finding
         :type M: MeanAnomaly
@@ -309,7 +306,7 @@ class CelestialOrbit:
 
         return -E if is_negative else E
 
-    def eccentric_from_mean_anomaly(self, M):
+    def eccentric_from_mean_anomaly(self, M:float) -> EccentricAnomaly:
         """
         Gets the Eccentric anomaly from mean anomaly using Brent's numerical root finding
         :type M: MeanAnomaly
@@ -337,7 +334,7 @@ class CelestialOrbit:
             raise
         return E
 
-    def to_mean_anomaly(self, theta):
+    def to_mean_anomaly(self, theta:float) -> MeanAnomaly:
         """
         :type theta: Anomaly
         :param theta: Anomaly
@@ -351,7 +348,7 @@ class CelestialOrbit:
         else:
             return MeanAnomaly(theta)
 
-    def mean_from_eccentric_anomaly(self, E):
+    def mean_from_eccentric_anomaly(self, E:float) -> MeanAnomaly:
         """
         :type E: EccentricAnomaly
         :param E: Eccentric anomaly
@@ -360,14 +357,14 @@ class CelestialOrbit:
         """
         return E - self.e * sin(E)
 
-    def in_shadow(self, solar_anomaly):
+    def in_shadow(self, solar_direction:float) -> bool:
         """
-        :param solar_anomaly: Solar direction
-        :type solar_anomaly: Anomaly
+        :param solar_direction: Solar direction
+        :type solar_direction: Anomaly
         :rtype: (TrueAnomaly, TrueAnomaly)
         :return: Start and ending true anomly of the shadow
         """
-        avg_theta = (solar_anomaly + pi) % (2 * pi)
+        avg_theta = (solar_direction + pi) % (2 * pi)
         R_body = self.parent.radius
 
         def shadow_func(theta):
@@ -396,7 +393,7 @@ class CelestialOrbit:
         theta = (t2, t1)
         return theta
 
-    def time_in_shadow(self, solar_anomaly):
+    def time_in_shadow(self, solar_anomaly:float) -> float:
         """
         :param solar_anomaly: Solar direction
         :type solar_anomaly: Anomaly
@@ -413,7 +410,7 @@ class CelestialOrbit:
         res = tuple(t / self.mean_motion for t in M)
         return res[1] - res[0]
 
-    def max_time_in_shadow(self):
+    def max_time_in_shadow(self) -> float:
         """
         Returns maximum time in shadow.
         Numerical solution, for standard orbits time_in_shadow(0) might be faster
@@ -425,7 +422,7 @@ class CelestialOrbit:
         # min_obj = minimize_scalar(lambda x: -self.time_in_shadow(x), bounds=(0, pi), method="bounded")
         # return min_obj.x, self.time_in_shadow(min_obj.x)
 
-    def total_max_time_in_shadow(self):
+    def iterative_max_time_in_shadow(self) -> float:
         """
         Returns total max time in shadow
         Iterativelly calls max_time_in_shadow for each orbit until star is found
@@ -434,7 +431,7 @@ class CelestialOrbit:
         """
         return sum(i[1] for i in self.generate_shadow_light_time_list())
 
-    def generate_shadow_light_time_list(self):
+    def generate_shadow_light_time_list(self) -> float:
         """
         Returns total max time in shadow
         Iterativelly calls max_time_in_shadow for each orbit until star is found
@@ -442,7 +439,7 @@ class CelestialOrbit:
         """
         o = self
         try:
-            while not isinstance(o.parent, CB.CelestialStar):
+            while not hasattr(o.parent, "brightness"):
                 period = o.period
                 t = o.max_time_in_shadow()
                 yield (period - t, t)
@@ -451,11 +448,11 @@ class CelestialOrbit:
             return
         return
 
-    def _true_anomaly_to_planar_position(self, nu):
+    def _true_anomaly_to_planar_position(self, nu:float) -> np.ndarray:
         r_abs = self.radius_from_true_anomaly(nu)
         return np.array([r_abs * cos(nu), r_abs * sin(nu), 0, 1])
 
-    def pythagoral_distance(self, nu1: TrueAnomaly, nu2: TrueAnomaly) -> float:
+    def pythagoral_distance(self, nu1:float, nu2:float) -> float:
         """
         :type nu1: TrueAnomaly
         :param nu1: Anomaly first object
@@ -469,7 +466,7 @@ class CelestialOrbit:
         d = np.linalg.norm(p1 - p2)
         return d
 
-    def true_anomaly_to_position(self, nu: TrueAnomaly) -> np.ndarray:
+    def true_anomaly_to_position(self, nu:float) -> np.ndarray:
         """
         :param nu: TrueAnomaly
         :type nu: TrueAnomaly
@@ -480,13 +477,13 @@ class CelestialOrbit:
         p_local = self.__planar_to_local_mat.dot(p_in_plane)
         return p_local[:3]
 
-    def true_anomaly_to_velocity(self, nu):
+    def true_anomaly_to_velocity(self, nu:float) -> np.ndarray:
         v_inplane = sqrt(self.parent.mu / self.semi_latus_rectum) * np.array([-sin(nu), self.e + cos(nu), 0, 0])
         v = self.__planar_to_local_mat.dot(v_inplane)
-        return np.squeeze(np.vstack(v))
+        return v[:3]
 
-    def _set_orbit_shape(self, eccentricity=None, semimajoraxis=None, semilatusrectum=None, periapsis=None,
-                         apoapsis=None):
+    def _set_orbit_shape(self, eccentricity:float=None, semimajoraxis:float=None, semilatusrectum:float=None,
+                         periapsis:float=None, apoapsis:float=None):
         t = [eccentricity is not None, semimajoraxis is not None, semilatusrectum is not None, periapsis is not None,
              apoapsis is not None]
         str = "Incorrect amount of orbital variables"
@@ -527,7 +524,7 @@ class CelestialOrbit:
             except AttributeError:
                 break
 
-    def get_normal_to_orbital_plane(self):
+    def get_normal_to_orbital_plane(self) -> np.ndarray:
         # vec1 = np.array([cos(self.long_asc_node), sin(self.long_asc_node),0])
         # vec2 = np.array([-sin(self.long_asc_node)*cos(self.inclination), cos(self.long_asc_node)*cos(self.inclination), sin(self.inclination)])
         # v = np.cross(vec1, vec2)
@@ -537,34 +534,36 @@ class CelestialOrbit:
 
     def get_orbital_plane_constants(self) -> tuple:
         n = self.get_normal_to_orbital_plane()
-        p = self.parent.getGlobalPositionAtTime()
+        p = self.parent.get_global_position_at_time()
         t = -n * p
         return tuple(n) + (np.sum(t),)
 
     def project_local_point_on_orbital_plane(self, point: np.ndarray) -> np.ndarray:
-        return point - np.dot(point, self.get_normal_to_orbital_plane()) * self.get_normal_to_orbital_plane()
+        return self._project_local_point_on_orbital_plane(point, self.get_normal_to_orbital_plane())
+    def _project_local_point_on_orbital_plane(self, point: np.ndarray, normal:np.ndarray) -> np.ndarray:
+        return point - np.dot(point, normal) * normal
 
     def to_planar_coordinates(self, local_3d_on_plane: np.ndarray) -> np.ndarray:
         return self.__local_to_planar_mat[:3, :3].dot(local_3d_on_plane)[:2]
 
-    def to_local_coordinates(self, point_2d_in_plane):
+    def to_local_coordinates(self, point_2d_in_plane:np.ndarray) -> np.ndarray:
         p = np.array([point_2d_in_plane[0], point_2d_in_plane[1], 0, 1])
         return self.__planar_to_local_mat.dot(p)[:3]
 
     def to_global_position_at_time(self, local_coordinates, time=None):
-        return local_coordinates + self.parent.getGlobalPositionAtTime(time)
+        return local_coordinates + self.parent.get_global_position_at_time(time)
 
     def get_distance(self, root_point: np.ndarray, true_anomaly: TrueAnomaly) -> float:
         p = self.true_anomaly_to_position(true_anomaly)
-        parent_pos = self.parent.getGlobalPositionAtTime()
+        parent_pos = self.parent.get_global_position_at_time()
         d = np.linalg.norm(p + parent_pos - root_point)
         return d
 
-    def getMaxDistance_outdated(self, ancestor_body):
+    def getMaxDistance_outdated(self, ancestor_body:"CB.CelestialBody") -> float:
         if self.parent == ancestor_body:
             return self.apoapsis_distance
         # l = list(self.create_tree_branch(ancestory_body))
-        root_point = ancestor_body.getGlobalPositionAtTime()
+        root_point = ancestor_body.get_global_position_at_time()
 
         def fun_negative_distance(x, root_point):
             return -self.get_distance(root_point, x)
@@ -578,9 +577,10 @@ class CelestialOrbit:
         # print(res.x, fun_negative_distance(res.x))
         return -res.fun
 
-    def get_total_max_distance(self, ancestor_body:"typing.Union[CB.CelestialBody,np.ndarray]", eps:float=3*np.finfo(float).eps):
+    def get_total_max_distance(self, ancestor_body:"typing.Union[CB.CelestialBody,np.ndarray]",
+                               eps:float=3*np.finfo(float).eps) -> float:
         try:
-            pos = ancestor_body.getGlobalPositionAtTime()
+            pos = ancestor_body.get_global_position_at_time()
         except AttributeError:
             pos = ancestor_body
             orbit_list = list(self.create_tree_branch(None))
@@ -594,7 +594,7 @@ class CelestialOrbit:
     def _get_total_max_distance(self, root_point:np.ndarray,
                                 parent_position:np.ndarray,
                                 orbit_list:typing.List["CelestialOrbit"],
-                                eps: float = 3 * np.finfo(float).eps) -> float:
+                                eps: float = 3*np.finfo(float).eps) -> float:
         other = orbit_list[0]
 
         def calculate_distance_(true_anomaly):
@@ -614,26 +614,29 @@ class CelestialOrbit:
         res = minimize_scalar(lambda x: -calculate_distance_(x), bounds=(0, 2 * pi - eps), method="Bounded", tol=eps)
         return -res.fun
 
-    def get_max_distance_non_recursive(self, ancestor_body: "CB.CelestialBody", eps=3 * np.finfo(float).eps):
+    def get_max_distance_non_recursive(self, ancestor_body:"CB.CelestialBody",
+                                       eps:float=3*np.finfo(float).eps) -> float:
         if self.parent == ancestor_body:
             return self.apoapsis_distance
-        root_point = ancestor_body.getGlobalPositionAtTime()
-        parent_position = self.parent.getGlobalPositionAtTime()
+        root_point = ancestor_body.get_global_position_at_time()
+        parent_position = self.parent.get_global_position_at_time()
         return self._get_max_distance_non_recursive(root_point, parent_position, eps)
 
-    def _get_max_distance_non_recursive(self, root_point, parent_position, eps):
+    def _get_max_distance_non_recursive(self, root_point:np.ndarray, parent_position:np.ndarray,
+                                        eps:float=3*np.finfo(float).eps) -> float:
         local_root = root_point - parent_position
-        distance_to_plane = sum(self.get_normal_to_orbital_plane() * local_root)
-        proj_root = self.project_local_point_on_orbital_plane(local_root)
+        plane_normal = self.get_normal_to_orbital_plane()
+        distance_to_plane = plane_normal.dot(local_root)
+        proj_root = self._project_local_point_on_orbital_plane(local_root, plane_normal)
         if self.e == 0:
-            in_plane_distance = sum(proj_root ** 2 + self.semi_major_axis)
+            in_plane_distance_squared = (m.sqrt(proj_root.dot(proj_root)) + self.semi_major_axis)**2
         else:
             ellipse_root = self.to_planar_coordinates(proj_root)
             # origin transform from focal point to center
             ellipse_root[0] += self.e * self.semi_major_axis
             if abs(ellipse_root[1] / ellipse_root[0]) <= eps:
                 # on long axis, or center ellipse, quick way to calculate
-                in_plane_distance = abs(ellipse_root[0]) + self.semi_major_axis
+                in_plane_distance_squared = (abs(ellipse_root[0]) + self.semi_major_axis)**2
             else:
                 if ellipse_root[0] >= 0:
                     if ellipse_root[1] > 0:
@@ -670,76 +673,76 @@ class CelestialOrbit:
                         theta = left_bound
                     else:
                         theta = right_bound
-                in_plane_distance = sqrt((a * cos(theta) - ellipse_root[0]) ** 2 +
-                                         (b * sin(theta) - ellipse_root[1]) ** 2)
+                in_plane_distance_squared = (a * cos(theta) - ellipse_root[0]) ** 2 +\
+                                            (b * sin(theta) - ellipse_root[1]) ** 2
 
-        return sqrt(distance_to_plane ** 2 + in_plane_distance ** 2)
+        return m.sqrt(distance_to_plane ** 2 + in_plane_distance_squared)
 
-    def get_average_distance_current_time(self):
+    def get_average_distance_current_time(self) -> float:
         body = self.parent
-        if isinstance(body, CB.CelestialStar):
+        if hasattr(body, "brightness"):
             return self.semi_major_axis
-        while not isinstance(body.orbit.parent, CB.CelestialStar):
+        while not hasattr(body.orbit.parent, "brightness"):
             body = body.orbit.parent
         return body.get_distance_central_body()
 
     @property
-    def inclination(self):
+    def inclination(self) -> float:
         return self.__i
 
     @inclination.setter
-    def inclination(self, value):
+    def inclination(self, value:float):
         self.__i = value
         self.__UpdateConvMats()
 
     @property
-    def long_asc_node(self):
+    def long_asc_node(self) -> float:
         return self.__long_asc_node
 
     @long_asc_node.setter
-    def long_asc_node(self, v):
+    def long_asc_node(self, v:float):
         self.__long_asc_node = v
         self.__UpdateConvMats()
 
     @property
-    def arg_peri(self):
+    def arg_peri(self) -> float:
         return self.__arg_peri
 
     @arg_peri.setter
-    def arg_peri(self, v):
+    def arg_peri(self, v:float):
         self.__arg_peri = v
         self.__UpdateConvMats()
 
     @property
-    def semi_major_axis(self):
+    def semi_major_axis(self) -> float:
         return self.semi_latus_rectum / (1 - self.e ** 2)
 
     @semi_major_axis.setter
-    def semi_major_axis(self, value):
+    def semi_major_axis(self, value:float):
         self.semi_latus_rectum = value * (1 - self.e ** 2)
 
     @property
-    def semi_minor_axis(self):
+    def semi_minor_axis(self) -> float:
         return self.semi_latus_rectum / sqrt(1 - self.e ** 2)
 
     @semi_minor_axis.setter
-    def semi_minor_axis(self, value):
+    def semi_minor_axis(self, value:float):
         self.semi_latus_rectum = value * sqrt(1 - self.e ** 2)
 
     @property
-    def mean_motion(self):
+    def mean_motion(self) -> float:
         return sqrt(self.parent.mu / self.semi_major_axis ** 3.)
 
     @property
-    def period(self):
+    def period(self) -> float:
         return 2 * pi * sqrt(self.semi_major_axis ** 3 / self.parent.mu)
 
     @property
-    def periapsis_distance(self):
+    def periapsis_distance(self) -> float:
         return self.semi_latus_rectum / (1 + self.e)
 
     @property
-    def apoapsis_distance(self):
+    def apoapsis_distance(self) -> float:
         return self.semi_latus_rectum / (1 - self.e)
 
     def __UpdateConvMats(self):

@@ -228,7 +228,8 @@ class EnergyGenerationPart(KSPPart):
         self.modules.add(copy.deepcopy(ModuleEnergy))
 
     def getChargeRate(self, distance=0):
-        return sum(m.getChargeRate(distance) for m in self.modules if hasattr(m,"getChargeRate"))
+        l=[m.getChargeRate(distance) for m in self.modules if hasattr(m,"getChargeRate")]
+        return sum(l)
 
 
 class Antenna(KSPPart):

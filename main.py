@@ -17,7 +17,6 @@ import ksp_part_remotetech
 import ksp_part_squad
 import copy
 import itertools
-
 def FuelFraction(dV, I_sp, g0 = 9.81):
     # dv = I_sp*g0 * ln(M0/M_dry)
     # M0/M_dry = exp(dV/v_e)
@@ -25,7 +24,7 @@ def FuelFraction(dV, I_sp, g0 = 9.81):
     # (M0 - M_f)/M0 = 1/exp(dV/v_e)
     # 1 - FF = exp(-dV/v_e)
     # FF = 1 - exp(-dV/v_e)
-    return 1 - math.exp(- dV /(I_sp * g0))
+    return 1 - math.exp(-dV / (I_sp * g0))
 
 def FuelMass(dV, payload_mass, I_sp, g0 = 9.81):
     # ff = M_fuel / M0 = M_fuel / (M_dry + M_fuel)
@@ -58,7 +57,7 @@ def delta_v(payload_mass, fuel_mass, I_sp, g0=9.81):
 
 
 def Satellite_ElectricalDesign(orbit, use_power):
-    shadow_time = orbit.total_max_time_in_shadow()
+    shadow_time = orbit.iterative_max_time_in_shadow()
     light_time = orbit.orbital_period() - shadow_time
     energy = shadow_time * use_power
     solar_cell_power = energy / light_time + use_power
@@ -103,11 +102,27 @@ class TestObj(object):
 if __name__ == "__main__":
     Kerbol = CelestialStar(name="Kerbol", mass=1.7565670E28, mu=1.1723328E18, radius=261600000,
                            sidereal_rotation_period=432000, atmosphere_height=600000, brightness=1)
-    a = 0.1*pi
-    kerbin_orbit = CelestialOrbit(celestial_parent_body=Kerbol, inclination=0, longitude_ascending_node=a,
+
+    moho_orbit = CelestialOrbit(celestial_parent_body=Kerbol, inclination=radians(7), longitude_ascending_node=radians(70),
+                                  argument_periapsis=radians(15), eccentricity=0.2, semimajoraxis=5263138304)
+    Moho = CelestialBody_Orbitting(name="Moho", mass=2.5263617e21, mu=1.6860938e11, radius=250000,
+                                     sidereal_rotation_period=1210000, SOI_radius=9646663, atmosphere_height=0,
+                                     mean_anomaly_at_epoch=3.14, orbit=moho_orbit)
+    eve_orbit = CelestialOrbit(celestial_parent_body=Kerbol, inclination=radians(2.1), longitude_ascending_node=radians(15),
+                                  argument_periapsis=radians(0), eccentricity=0.01, semimajoraxis=9832684544)
+    Eve = CelestialBody_Orbitting(name="Eve", mass=1.2244127e23, mu=8.1717302e12, radius=700000,
+                                     sidereal_rotation_period=81661.857, SOI_radius=85109365, atmosphere_height=90000,
+                                     mean_anomaly_at_epoch=3.14, orbit=eve_orbit)
+    gilly_orbit = CelestialOrbit(celestial_parent_body=Eve, inclination=radians(12), longitude_ascending_node=radians(80),
+                                  argument_periapsis=radians(10), eccentricity=0.55, semimajoraxis=31500000)
+    Gilly = CelestialBody_Orbitting(name="Gilly", mass=1.2420512e17, mu=8289449.8, radius=13000,
+                                     sidereal_rotation_period=28255, SOI_radius=126123.27, atmosphere_height=0,
+                                     mean_anomaly_at_epoch=0.9, orbit=gilly_orbit)
+
+    kerbin_orbit = CelestialOrbit(celestial_parent_body=Kerbol, inclination=0, longitude_ascending_node=0,
                                   argument_periapsis=0, eccentricity=0.000, semimajoraxis=13599840256)
     Kerbin = CelestialBody_Orbitting(name="Kerbin", mass=5.2915793e22, mu=3.5316000e15, radius=600000,
-                                     sidereal_rotation_period=21599.912, SOI_radius=84159286, atmosphere_height=70000,
+                                     sidereal_rotation_period=21549.425, SOI_radius=84159286, atmosphere_height=70000,
                                      mean_anomaly_at_epoch=0.5, orbit=kerbin_orbit)
 
     mun_orbit = CelestialOrbit(celestial_parent_body=Kerbin, inclination=0, longitude_ascending_node=0,
@@ -122,6 +137,58 @@ if __name__ == "__main__":
     Minmus = CelestialBody_Orbitting(name="Minmus", mass=2.6457897e19, mu=1.7658000e9,
                                      radius=60000, sidereal_rotation_period=40400,
                                      mean_anomaly_at_epoch=0.9, SOI_radius=2247428.4, orbit=minmus_orbit)
+    duna_orbit = CelestialOrbit(celestial_parent_body=Kerbol, inclination=radians(0.06), longitude_ascending_node=radians(135.5),
+                                  argument_periapsis=radians(0), eccentricity=0.05, semimajoraxis=20726155264)
+    Duna = CelestialBody_Orbitting(name="Duna", mass=4.5154812e12, mu=3.0136321e11, radius=320000,
+                                     sidereal_rotation_period=65517.859, SOI_radius=47921949, atmosphere_height=50000,
+                                     mean_anomaly_at_epoch=3.14, orbit=duna_orbit)
+    ike_orbit = CelestialOrbit(celestial_parent_body=Duna, inclination=radians(0.2), longitude_ascending_node=radians(0),
+                                  argument_periapsis=radians(0), eccentricity=0.03, semimajoraxis=3200000)
+    Ike = CelestialBody_Orbitting(name="Ike", mass=2.7821949e20, mu=1.8568369e10, radius=130000,
+                                     sidereal_rotation_period=65517.862, SOI_radius=1049598.9, atmosphere_height=0,
+                                     mean_anomaly_at_epoch=1.7, orbit=ike_orbit)
+
+    dres_orbit = CelestialOrbit(celestial_parent_body=Kerbol, inclination=radians(5), longitude_ascending_node=radians(280),
+                                  argument_periapsis=radians(90), eccentricity=0.14, semimajoraxis=40839348203)
+    Dres = CelestialBody_Orbitting(name="Dres", mass=3.2191322e20, mu=2.1484489e10, radius=138000,
+                                     sidereal_rotation_period=34800, SOI_radius=32832840, atmosphere_height=0,
+                                     mean_anomaly_at_epoch=3.14, orbit=dres_orbit)
+    jool_orbit = CelestialOrbit(celestial_parent_body=Kerbol, inclination=radians(1.304), longitude_ascending_node=radians(52),
+                                  argument_periapsis=radians(0), eccentricity=0.05, semimajoraxis=68773560320)
+    Jool = CelestialBody_Orbitting(name="Jool", mass=4.2332635e24, mu=2.8252800e14, radius=6000000,
+                                     sidereal_rotation_period=36000, SOI_radius=2.4559852e9, atmosphere_height=200000,
+                                     mean_anomaly_at_epoch=0.1, orbit=jool_orbit)
+    laythe_orbit = CelestialOrbit(celestial_parent_body=Jool, inclination=radians(0), longitude_ascending_node=radians(0),
+                                  argument_periapsis=radians(0), eccentricity=0, semimajoraxis=27184000)
+    Laythe = CelestialBody_Orbitting(name="Laythe", mass=2.9397663e22, mu=1.9620000e12, radius=500000,
+                                     sidereal_rotation_period=52980.879, SOI_radius=3723645.8, atmosphere_height=50000,
+                                     mean_anomaly_at_epoch=3.14, orbit=laythe_orbit)
+    vall_orbit = CelestialOrbit(celestial_parent_body=Jool, inclination=radians(0), longitude_ascending_node=radians(0),
+                                  argument_periapsis=radians(0), eccentricity=0, semimajoraxis=43152000)
+    Vall = CelestialBody_Orbitting(name="Vall", mass=3.1088028e21, mu=2.0748150e11, radius=300000,
+                                     sidereal_rotation_period=105962.09, SOI_radius=2406401.4, atmosphere_height=0,
+                                     mean_anomaly_at_epoch=0.9, orbit=vall_orbit)
+    tylo_orbit = CelestialOrbit(celestial_parent_body=Jool, inclination=radians(0.025), longitude_ascending_node=radians(0),
+                                  argument_periapsis=radians(0), eccentricity=0, semimajoraxis=68500000)
+    Tylo = CelestialBody_Orbitting(name="Tylo", mass=4.2332635e22, mu=2.852800e12, radius=600000,
+                                     sidereal_rotation_period=211926.36, SOI_radius=10856518, atmosphere_height=0,
+                                     mean_anomaly_at_epoch=3.14, orbit=tylo_orbit)
+    bop_orbit = CelestialOrbit(celestial_parent_body=Jool, inclination=radians(15), longitude_ascending_node=radians(10),
+                                  argument_periapsis=radians(25), eccentricity=0.24, semimajoraxis=128500000)
+    Bop = CelestialBody_Orbitting(name="Bop", mass=3.7261536e19, mu=2.4868349e9, radius=65000,
+                                     sidereal_rotation_period=544507.43, SOI_radius=1221060.9, atmosphere_height=0,
+                                     mean_anomaly_at_epoch=0.9, orbit=bop_orbit)
+    pol_orbit = CelestialOrbit(celestial_parent_body=Jool, inclination=radians(4.25), longitude_ascending_node=radians(2),
+                                  argument_periapsis=radians(15), eccentricity=0.17, semimajoraxis=179890000)
+    Pol = CelestialBody_Orbitting(name="Pol", mass=1.0813636e19, mu=7.2170208e8, radius=44000,
+                                     sidereal_rotation_period=901902.62, SOI_radius=1042138.9, atmosphere_height=0,
+                                     mean_anomaly_at_epoch=0.9, orbit=pol_orbit)
+
+    eeloo_orbit = CelestialOrbit(celestial_parent_body=Kerbol, inclination=radians(6.15), longitude_ascending_node=radians(50),
+                                  argument_periapsis=radians(260), eccentricity=0.26, semimajoraxis=90118820000)
+    Eeloo = CelestialBody_Orbitting(name="Eeloo", mass=1.1149358e21, mu=7.4410815e10, radius=210000,
+                                     sidereal_rotation_period=19460, SOI_radius=1.1908294e8, atmosphere_height=0,
+                                     mean_anomaly_at_epoch=3.14, orbit=eeloo_orbit)
 
     max_orbit = CelestialOrbit(celestial_parent_body=Kerbin, inclination=0, longitude_ascending_node=0,
                                argument_periapsis=0, eccentricity=0, semimajoraxis=Kerbin.SOI)
@@ -130,8 +197,8 @@ if __name__ == "__main__":
     max_minmus_orbit = CelestialOrbit(celestial_parent_body=Minmus, inclination=0, longitude_ascending_node=0,
                                       argument_periapsis=0, eccentricity=0, semimajoraxis=Minmus.SOI)
 
-    sat_orbit = CelestialOrbit(celestial_parent_body=Minmus, inclination=pi, longitude_ascending_node=pi/3,
-                               argument_periapsis=pi, eccentricity=0.99, semimajoraxis=Minmus.SOI)
+    sat_orbit = CelestialOrbit(celestial_parent_body=Kerbin, inclination=pi, longitude_ascending_node=pi/3,
+                               argument_periapsis=pi, eccentricity=0.0, semimajoraxis=Minmus.SOI)
 
 
     techs = [
@@ -144,41 +211,14 @@ if __name__ == "__main__":
         "specializedElectrics"
     ]
 
-    #print(Kerbin.orbit_period/2, sat_orbit.period, (Kerbin.orbit_period/2)/sat_orbit.period)
-    #x = np.linspace(0, kerbin_orbit.period/2, 100)
-    #print(x[1] - x[0])
-    y = []
-    y2=[]
-    y3 = []
-    #fig = plt.figure()
-    #ax = fig.add_subplot("111")
-    #for i in np.nditer(x):
-    #    Kerbol.updateTimeWholeSystem(i)
-    #    y.append(minmus_orbit.get_max_distance_non_recursive(Kerbol))
-    #    y2.append(sat_orbit.get_max_distance_non_recursive(Kerbol))
-    #    y3.append(minmus_orbit.get_average_distance_current_time())
-
-    #ax.plot(x,np.array(y3))
-    #ax.plot(x,np.array(y))
-    #ax.plot(x,np.array(y2))
-    print("----------")
-    for i in range(1):
-        sat_orbit.get_total_max_distance(Kerbol, eps=0.00001)
-    #ax.set_ylim([0, ax.get_ylim()[1]])
-    #plt.show()
-    exit()
-
-
-
-
-    sat = satellite.satellite(orbit=sat_orbit)
-
+    sat = satellite.Satellite(orbit=sat_orbit, name="sat1") #type:satellite.Satellite
+    print("here")
     sat.addPart(KSP_PART.ControlProbe["probeCoreOcto"])
-    for i in range(5):
+    for t_sat in range(5):
         sat.addPart(KSP_PART.Antenna["mediumDishAntenna"])
     print(sat.orbit.max_time_in_shadow(), sat.orbit.time_in_shadow(0) - sat.orbit.max_time_in_shadow())
-    print(sat.getMaxAverageDistance())
-    print(sat.getMaxDistance())
+    print(sat.average_max_distance_to_star())
+    print(sat.max_distance_to_star())
     #KSP_PART.BatteryPack["batteryPack"].price = 90
     #KSP_PART.BatteryPack["batteryBank"].mass *= 1000
 
@@ -195,22 +235,42 @@ if __name__ == "__main__":
         right_power = min(r.getChargeRate(distance), useful_power)
         left_v = (left_power/l.mass, left_power/l.price, left_power)
         right_v = (right_power/r.mass, right_power/r.price, right_power)
+        print(l.title, r.title)
+        print(left_power, right_power)
+        print(left_v, right_v)
+        print([ll > rr for ll,rr in zip(left_v, right_v)])
         t = any(ll > rr for ll,rr in zip(left_v, right_v))
         return t
 
 
     power_requirements = satellite.calculate_minimal_charge_rate(sat)
     print(power_requirements)
-    all_copies = satellite.generate_all_solar_cells(sat, techs, power_requirements, first_order_check=check_solar_cell)
+    energy_storage_requirements = sat.calculate_minimal_electric_storage()
+    energy_storage_requirements = 3900
+    r = satellite.generate_all_battery(techs, energy_storage_requirements, check_battery)
+    for t_sat in r:
+        print("----------")
+        m = sum(i.mass for i in t_sat)
+        p = sum(i.price for i in t_sat)
+        print("price:", p, "Mass", m)
+        for j in t_sat:
+            print(j.name)
 
+    print("---------------------------")
+    all_copies = satellite.generate_all_solar_cells(techs, power_requirements,
+                                                    distance=sat.max_distance_to_star(),
+                                                    first_order_check=check_solar_cell)
+    for t_sat in all_copies:
+        print("----------")
+        m = sum(i.mass for i in t_sat)
+        p = sum(i.price for i in t_sat)
+        print("price:", p, "Mass", m)
+        for j in t_sat:
+            print(j.title)
     #for i in range(1):
     #    energy_storage_requirements = satellite.calculate_minimal_electric_storage(sat)
     #    #print(energy_storage_requirements)
     #    all_copies = satellite.generate_all_battery(sat,techs, energy_storage_requirements, check_battery)
-    print(len(all_copies))
-    for s in all_copies:
-        print({"mass:": s.mass, "price":s.price})
-        for p in s._all_parts:
-            print(" - ", p.title)
+
 
     print("done")
